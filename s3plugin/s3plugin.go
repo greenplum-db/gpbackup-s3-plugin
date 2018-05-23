@@ -141,8 +141,8 @@ func readPluginConfig(configFile string) (*PluginConfig, error) {
 }
 
 func validateConfig(config *PluginConfig) error {
-	required_keys := []string{"aws_access_key_id", "aws_secret_access_key", "region", "bucket", "folder"}
-	for _, key := range required_keys {
+	requiredKeys := []string{"aws_access_key_id", "aws_secret_access_key", "region", "bucket", "folder"}
+	for _, key := range requiredKeys {
 		if config.Options[key] == "" {
 			return fmt.Errorf("%s must exist in plugin configuration file", key)
 		}
