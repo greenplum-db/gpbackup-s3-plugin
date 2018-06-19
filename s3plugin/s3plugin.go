@@ -26,9 +26,6 @@ func SetupPluginForBackup(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = validateConfig(config); err != nil {
-		return err
-	}
 	localBackupDir := c.Args().Get(1)
 	_, timestamp := filepath.Split(localBackupDir)
 	testFilePath := fmt.Sprintf("%s/gpbackup_%s_report", localBackupDir, timestamp)
@@ -41,14 +38,8 @@ func SetupPluginForBackup(c *cli.Context) error {
 }
 
 func SetupPluginForRestore(c *cli.Context) error {
-	config, err := readPluginConfig(c.Args().Get(0))
-	if err != nil {
-		return err
-	}
-	if err = validateConfig(config); err != nil {
-		return err
-	}
-	return nil
+	_, err := readAndValidatePluginConfig(c.Args().Get(0))
+	return err
 }
 
 func CleanupPlugin(c *cli.Context) error {
@@ -128,7 +119,7 @@ type PluginConfig struct {
 	Options        map[string]string
 }
 
-func readPluginConfig(configFile string) (*PluginConfig, error) {
+func readAndValidatePluginConfig(configFile string) (*PluginConfig, error) {
 	config := &PluginConfig{}
 	contents, err := ioutil.ReadFile(configFile)
 	if err != nil {
@@ -137,30 +128,42 @@ func readPluginConfig(configFile string) (*PluginConfig, error) {
 	if err := yaml.Unmarshal(contents, config); err != nil {
 		return nil, err
 	}
+	if err := ValidateConfig(config); err != nil {
+		return nil, err
+	}
 	return config, nil
 }
 
-func validateConfig(config *PluginConfig) error {
-	requiredKeys := []string{"aws_access_key_id", "aws_secret_access_key", "region", "bucket", "folder"}
+func ValidateConfig(config *PluginConfig) error {
+	requiredKeys := []string{"aws_access_key_id", "aws_secret_access_key", "bucket", "folder"}
 	for _, key := range requiredKeys {
 		if config.Options[key] == "" {
 			return fmt.Errorf("%s must exist in plugin configuration file", key)
 		}
+	}
+
+	if config.Options["region"] == "" {
+		if config.Options["endpoint"] == "" {
+			return fmt.Errorf("region or endpoint must exist in plugin configuration file")
+		}
+		config.Options["region"] = "unused"
 	}
 	return nil
 }
 
 func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session, error) {
 	configPath := c.Args().Get(0)
-	config, err := readPluginConfig(configPath)
+	config, err := readAndValidatePluginConfig(configPath)
 	if err != nil {
 		return nil, nil, err
 	}
-	region := config.Options["region"]
-	credentials := credentials.NewStaticCredentials(config.Options["aws_access_key_id"], config.Options["aws_secret_access_key"], "")
+	credentials := credentials.NewStaticCredentials(config.Options["aws_access_key_id"],
+		config.Options["aws_secret_access_key"], "")
 	session, err := session.NewSession(&aws.Config{
-		Region:      &region,
-		Credentials: credentials,
+		Region:           aws.String(config.Options["region"]),
+		Endpoint:         aws.String(config.Options["endpoint"]),
+		Credentials:      credentials,
+		S3ForcePathStyle: aws.Bool(true),
 	})
 	if err != nil {
 		return nil, nil, err

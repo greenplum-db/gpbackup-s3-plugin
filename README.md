@@ -5,6 +5,8 @@ To use the S3 plugin, you specify the location of the plugin and the AWS login a
 
 If you perform a backup operation with the gpbackup option --plugin-config, you must also specify the --plugin-config option when you restore the backup with gprestore.
 
+The S3 plugin supports both AWS and custom storage servers that implement the S3 interface.
+
 ## S3 Storage Plugin Configuration File Format
 The configuration file specifies the absolute path to the gpbackup_s3_plugin executable, AWS connection credentials, and S3 location.
 
@@ -14,6 +16,7 @@ The configuration file must be a valid YAML document in the following format:
 executablepath: <absolute-path-to-gpbackup_s3_plugin>
 options: 
   region: <aws-region>
+  endpoint: <s3-endpoint>
   aws_access_key_id: <aws-user-id>
   aws_secret_access_key: <aws-user-id-key>
   bucket: <s3-bucket>
@@ -22,7 +25,7 @@ options:
 
 **executablepath:**
 
-Absolute path to the plugin executable. For example, the Pivotal Greenplum Database installation location is $GPHOME/bin/gpbackup_s3_plugin.
+Absolute path to the plugin executable. For example, the path to the gpbackup S3 plugin is $GPHOME/bin/gpbackup_s3_plugin.
 
 **options:**
 
@@ -31,6 +34,14 @@ Begins the S3 storage plugin options section.
 **region:**
 
 The AWS region.
+
+Note: This parameter will is be ignored if `endpoint` is specified.
+
+**endpoint:**
+
+The endpoint to a server implementing the S3 interface.
+
+Note: This parameter should not be specified if using AWS.
 
 **aws_access_key_id:**
 
@@ -42,7 +53,7 @@ AWS S3 passcode for the S3 ID to access the S3 bucket location.
 
 **bucket:**
 
-The name of the S3 bucket in the AWS region. The bucket must exist.
+The name of the S3 bucket. The bucket must exist with the necessary permissions.
 
 **folder:**
 
