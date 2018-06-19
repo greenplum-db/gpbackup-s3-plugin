@@ -14,7 +14,7 @@ func TestCluster(t *testing.T) {
 }
 
 var _ = Describe("s3_plugin tests", func() {
-	Context("GetS3Path", func() {
+	Describe("GetS3Path", func() {
 		It("", func() {
 			folder := "s3/Dir"
 			path := "/tmp/datadir/gpseg-1/backups/20180101/2018010101010101/backup_file"
@@ -23,7 +23,7 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(newPath).To(Equal(expectedPath))
 		})
 	})
-	Context("ValidateConfig", func() {
+	Describe("ValidateConfig", func() {
 		var pluginConfig *s3plugin.PluginConfig
 		BeforeEach(func() {
 			pluginConfig = &s3plugin.PluginConfig{

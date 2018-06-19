@@ -25,7 +25,7 @@ options:
 
 **executablepath:**
 
-Absolute path to the plugin executable. For example, the path to the gpbackup S3 plugin is $GPHOME/bin/gpbackup_s3_plugin.
+Absolute path to the plugin executable. For example, the Greenplum Database installation location is $GPHOME/bin/gpbackup_s3_plugin.
 
 **options:**
 
@@ -35,7 +35,7 @@ Begins the S3 storage plugin options section.
 
 The AWS region.
 
-Note: This parameter will is be ignored if `endpoint` is specified.
+Note: This parameter will be ignored if `endpoint` is specified.
 
 **endpoint:**
 
