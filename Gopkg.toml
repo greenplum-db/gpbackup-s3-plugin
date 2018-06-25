@@ -31,8 +31,8 @@ required = ["golang.org/x/tools/cmd/goimports", "github.com/onsi/ginkgo/ginkgo"]
   version = "1.13.19"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/onsi/ginkgo"
+  version = "1.5.0"
 
 [[constraint]]
   name = "github.com/onsi/gomega"

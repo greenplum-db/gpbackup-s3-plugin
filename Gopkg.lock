@@ -14,6 +14,7 @@
     "aws/credentials/ec2rolecreds",
     "aws/credentials/endpointcreds",
     "aws/credentials/stscreds",
+    "aws/csm",
     "aws/defaults",
     "aws/ec2metadata",
     "aws/endpoints",
@@ -24,6 +25,8 @@
     "internal/sdkrand",
     "internal/shareddefaults",
     "private/protocol",
+    "private/protocol/eventstream",
+    "private/protocol/eventstream/eventstreamapi",
     "private/protocol/query",
     "private/protocol/query/queryutil",
     "private/protocol/rest",
@@ -34,14 +37,14 @@
     "service/s3/s3manager",
     "service/sts"
   ]
-  revision = "c0ea8ae46aeed5902eeebe10d0d5cdf54b258526"
-  version = "v1.13.19"
+  revision = "e79e9fd4ec11ccc242a472f980be78830f9eba80"
+  version = "v1.14.13"
 
 [[projects]]
   name = "github.com/go-ini/ini"
   packages = ["."]
-  revision = "6333e38ac20b8949a8dd68baa3650f4dee8f39f0"
-  version = "v1.33.0"
+  revision = "06f5f3d67269ccec1fe5fe4134ba6e982984f7f5"
+  version = "v1.37.0"
 
 [[projects]]
   name = "github.com/jmespath/go-jmespath"
@@ -78,7 +81,7 @@
     "reporters/stenographer/support/go-isatty",
     "types"
   ]
-  revision = "6d8be987c536ebd84576a5a46208e7b7a3c796b0"
+  revision = "000d317071340972710dc1da9ae3c2c016a7a560"
 
 [[projects]]
   name = "github.com/onsi/gomega"
@@ -96,8 +99,8 @@
     "matchers/support/goraph/util",
     "types"
   ]
-  revision = "003f63b7f4cff3fc95357005358af2de0f5fe152"
-  version = "v1.3.0"
+  revision = "62bff4df71bdbc266561a0caee19f0594b17c240"
+  version = "v1.4.0"
 
 [[projects]]
   name = "github.com/urfave/cli"
@@ -113,13 +116,13 @@
     "html/atom",
     "html/charset"
   ]
-  revision = "6078986fec03a1dcc236c34816c71b0e05018fda"
+  revision = "afe8f62b1d6bbd81f31868121a50b06d8188e1f9"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "91ee8cde435411ca3f1cd365e8f20131aed4d0a1"
+  revision = "a200a19cb90b19de298170992778b1fda7217bd6"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -154,13 +157,13 @@
     "imports",
     "internal/fastwalk"
   ]
-  revision = "c1def519f03ddf76f16b3e444ee1095d73afa01b"
+  revision = "3c1bb8b785f2aa4d86f83a0cd87fc1df046c60de"
 
 [[projects]]
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "7f97868eec74b32b0982dd158a51a446d1da7eb5"
-  version = "v2.1.1"
+  revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
+  version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
