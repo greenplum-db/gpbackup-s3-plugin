@@ -148,6 +148,7 @@ func ValidateConfig(config *PluginConfig) error {
 		}
 		config.Options["region"] = "unused"
 	}
+
 	return nil
 }
 
@@ -157,6 +158,7 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 	if err != nil {
 		return nil, nil, err
 	}
+	disableSSL := !ShouldEnableEncryption(config)
 	credentials := credentials.NewStaticCredentials(config.Options["aws_access_key_id"],
 		config.Options["aws_secret_access_key"], "")
 	session, err := session.NewSession(&aws.Config{
@@ -164,11 +166,19 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 		Endpoint:         aws.String(config.Options["endpoint"]),
 		Credentials:      credentials,
 		S3ForcePathStyle: aws.Bool(true),
+		DisableSSL:       aws.Bool(disableSSL),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	return config, session, nil
+}
+
+func ShouldEnableEncryption(config *PluginConfig) bool {
+	if strings.EqualFold(config.Options["encryption"], "off") {
+		return false
+	}
+	return true
 }
 
 func uploadFile(session *session.Session, bucket string, fileKey string, fileReader io.Reader) error {

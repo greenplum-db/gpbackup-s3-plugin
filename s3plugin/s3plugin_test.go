@@ -14,6 +14,20 @@ func TestCluster(t *testing.T) {
 }
 
 var _ = Describe("s3_plugin tests", func() {
+	var pluginConfig *s3plugin.PluginConfig
+	BeforeEach(func() {
+		pluginConfig = &s3plugin.PluginConfig{
+			ExecutablePath: "/tmp/location",
+			Options: map[string]string{
+				"aws_access_key_id":     "12345",
+				"aws_secret_access_key": "6789",
+				"bucket":                "bucket_name",
+				"folder":                "folder_name",
+				"region":                "region_name",
+				"endpoint":              "endpoint_name",
+			},
+		}
+	})
 	Describe("GetS3Path", func() {
 		It("", func() {
 			folder := "s3/Dir"
@@ -23,21 +37,30 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(newPath).To(Equal(expectedPath))
 		})
 	})
-	Describe("ValidateConfig", func() {
-		var pluginConfig *s3plugin.PluginConfig
-		BeforeEach(func() {
-			pluginConfig = &s3plugin.PluginConfig{
-				ExecutablePath: "/tmp/location",
-				Options: map[string]string{
-					"aws_access_key_id":     "12345",
-					"aws_secret_access_key": "6789",
-					"bucket":                "bucket_name",
-					"folder":                "folder_name",
-					"region":                "region_name",
-					"endpoint":              "endpoint_name",
-				},
-			}
+	Describe("ShouldEnableEncryption", func() {
+		It("returns true when no encryption in config", func() {
+			delete(pluginConfig.Options, "encryption")
+			result := s3plugin.ShouldEnableEncryption(pluginConfig)
+			Expect(result).To(BeTrue())
 		})
+		It("returns true when encryption set to 'on' in config", func() {
+			pluginConfig.Options["encryption"] = "on"
+			result := s3plugin.ShouldEnableEncryption(pluginConfig)
+			Expect(result).To(BeTrue())
+		})
+		It("returns false when encryption set to 'off' in config", func() {
+			pluginConfig.Options["encryption"] = "off"
+			result := s3plugin.ShouldEnableEncryption(pluginConfig)
+			Expect(result).To(BeFalse())
+		})
+		It("returns true when encryption set to anything else in config", func() {
+			pluginConfig.Options["encryption"] = "random_text"
+			result := s3plugin.ShouldEnableEncryption(pluginConfig)
+			Expect(result).To(BeTrue())
+		})
+
+	})
+	Describe("ValidateConfig", func() {
 		It("succeeds when all fields in config filled", func() {
 			err := s3plugin.ValidateConfig(pluginConfig)
 			Expect(err).To(BeNil())

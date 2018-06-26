@@ -21,6 +21,7 @@ options:
   aws_secret_access_key: <aws-user-id-key>
   bucket: <s3-bucket>
   folder: <s3-location>
+  encryption: [on|off]
  ```
 
 **executablepath:**
@@ -58,6 +59,10 @@ The name of the S3 bucket. The bucket must exist with the necessary permissions.
 **folder:**
 
 The S3 location for backups. During a backup operation, the plugin creates the S3 location if it does not exist in the S3 bucket.
+
+**encryption:**
+
+Enable or disable SSL encryption to connect to S3. Valid values are on and off. On by default.
 
 ## Example
 This is an example S3 storage plugin configuration file that is used in the next gpbackup example command. The name of the file is s3-test-config.yaml.
