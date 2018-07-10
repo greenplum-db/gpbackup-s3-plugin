@@ -30,7 +30,7 @@ const (
 )
 
 func SetupPluginForBackup(c *cli.Context) error {
-	if scope := (Scope)(c.Args().Get(3)); scope == Master || scope == SegmentHost {
+	if scope := (Scope)(c.Args().Get(2)); scope == Master || scope == SegmentHost {
 		config, sess, err := readConfigAndStartSession(c)
 		if err != nil {
 			return err
@@ -48,7 +48,7 @@ func SetupPluginForBackup(c *cli.Context) error {
 }
 
 func SetupPluginForRestore(c *cli.Context) error {
-	if scope := (Scope)(c.Args().Get(3)); scope == Master || scope == SegmentHost {
+	if scope := (Scope)(c.Args().Get(2)); scope == Master || scope == SegmentHost {
 		_, err := readAndValidatePluginConfig(c.Args().Get(0))
 		return err
 	}
