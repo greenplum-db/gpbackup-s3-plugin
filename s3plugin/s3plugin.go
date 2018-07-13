@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -16,10 +18,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
-	"path/filepath"
 )
 
 var Version string
+
+const API_VERSION = "0.3.0"
 
 type Scope string
 
@@ -30,7 +33,8 @@ const (
 )
 
 func SetupPluginForBackup(c *cli.Context) error {
-	if scope := (Scope)(c.Args().Get(2)); scope == Master || scope == SegmentHost {
+	args := c.Args()
+	if scope := (Scope)(args.Get(2)); scope == Master || scope == SegmentHost {
 		config, sess, err := readConfigAndStartSession(c)
 		if err != nil {
 			return err
@@ -121,7 +125,7 @@ func RestoreData(c *cli.Context) error {
 }
 
 func GetAPIVersion(c *cli.Context) {
-	fmt.Println("0.2.0")
+	fmt.Println(API_VERSION)
 }
 
 /*
@@ -220,5 +224,5 @@ func downloadFile(sess *session.Session, bucket string, fileKey string, fileWrit
 
 func GetS3Path(folder string, path string) string {
 	pathArray := strings.Split(path, "/")
-	return fmt.Sprintf("%s/%s", folder, strings.Join(pathArray[(len(pathArray) - 4):], "/"))
+	return fmt.Sprintf("%s/%s", folder, strings.Join(pathArray[(len(pathArray)-4):], "/"))
 }

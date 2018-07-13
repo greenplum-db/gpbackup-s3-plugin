@@ -3,9 +3,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
-	"fmt"
 
 	"github.com/greenplum-db/gpbackup-s3-plugin/s3plugin"
 	"github.com/urfave/cli"
@@ -24,22 +24,22 @@ func main() {
 		{
 			Name:   "setup_plugin_for_backup",
 			Action: s3plugin.SetupPluginForBackup,
-			Before: buildBeforeFunc(3),
+			Before: buildBeforeFunc(3, 4),
 		},
 		{
 			Name:   "setup_plugin_for_restore",
 			Action: s3plugin.SetupPluginForRestore,
-			Before: buildBeforeFunc(3),
+			Before: buildBeforeFunc(3, 4),
 		},
 		{
 			Name:   "cleanup_plugin_for_backup",
 			Action: s3plugin.CleanupPlugin,
-			Before: buildBeforeFunc(3),
+			Before: buildBeforeFunc(3, 4),
 		},
 		{
 			Name:   "cleanup_plugin_for_restore",
 			Action: s3plugin.CleanupPlugin,
-			Before: buildBeforeFunc(3),
+			Before: buildBeforeFunc(3, 4),
 		},
 		{
 			Name:   "backup_file",
@@ -74,13 +74,23 @@ func main() {
 	}
 }
 
-func buildBeforeFunc(expectedNArg int)(beforeFunc cli.BeforeFunc) {
-	 beforeFunc = func(context *cli.Context) error {
-		if actualNArg := context.NArg(); actualNArg != expectedNArg {
-			return fmt.Errorf("Invalid number of arguments to plugin command. " +
-				"Expected %d arguments. Got %d arguments", expectedNArg, actualNArg)
+func buildBeforeFunc(expectedNArgs ...int) (beforeFunc cli.BeforeFunc) {
+	beforeFunc = func(context *cli.Context) error {
+		actualNArg := context.NArg()
+		argMatched := false
+		for _, expectedNArg := range expectedNArgs {
+			if actualNArg == expectedNArg {
+				argMatched = true
+				break
+			}
 		}
-		return nil
+		if !argMatched {
+			return fmt.Errorf("Invalid number of arguments to plugin command. "+
+				"Expected %v arguments. Got %d arguments", expectedNArgs, actualNArg)
+		} else {
+			return nil
+		}
+
 	}
 	return beforeFunc
 }
