@@ -75,6 +75,12 @@ var _ = Describe("s3_plugin tests", func() {
 			err := s3plugin.ValidateConfig(pluginConfig)
 			Expect(err).To(BeNil())
 		})
+		It("succeeds when all fields except aws_access_key_id and aws_secret_access_key in config", func() {
+			delete(pluginConfig.Options, "aws_access_key_id")
+			delete(pluginConfig.Options, "aws_secret_access_key")
+			err := s3plugin.ValidateConfig(pluginConfig)
+			Expect(err).To(BeNil())
+		})
 		It("sets region to unused when endpoint is used instead of region", func() {
 			delete(pluginConfig.Options, "region")
 			s3plugin.ValidateConfig(pluginConfig)

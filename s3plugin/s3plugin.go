@@ -157,11 +157,19 @@ func readAndValidatePluginConfig(configFile string) (*PluginConfig, error) {
 }
 
 func ValidateConfig(config *PluginConfig) error {
-	requiredKeys := []string{"aws_access_key_id", "aws_secret_access_key", "bucket", "folder"}
+	requiredKeys := []string{"bucket", "folder"}
 	for _, key := range requiredKeys {
 		if config.Options[key] == "" {
 			return fmt.Errorf("%s must exist in plugin configuration file", key)
 		}
+	}
+
+	if config.Options["aws_access_key_id"] == "" {
+		if config.Options["aws_secret_access_key"] != "" {
+			return fmt.Errorf("aws_access_key_id must exist in plugin configuration file if aws_secret_access_key does")
+		}
+	} else if config.Options["aws_secret_access_key"] == "" {
+		return fmt.Errorf("aws_secret_access_key must exist in plugin configuration file if aws_access_key_id does")
 	}
 
 	if config.Options["region"] == "" {
@@ -181,15 +189,17 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 		return nil, nil, err
 	}
 	disableSSL := !ShouldEnableEncryption(config)
-	creds := credentials.NewStaticCredentials(config.Options["aws_access_key_id"],
-		config.Options["aws_secret_access_key"], "")
-	sess, err := session.NewSession(&aws.Config{
-		Region:           aws.String(config.Options["region"]),
-		Endpoint:         aws.String(config.Options["endpoint"]),
-		Credentials:      creds,
-		S3ForcePathStyle: aws.Bool(true),
-		DisableSSL:       aws.Bool(disableSSL),
-	})
+
+	awsConfig := aws.NewConfig().WithRegion(config.Options["region"]).WithEndpoint(config.Options["endpoint"]).WithS3ForcePathStyle(true).WithDisableSSL(disableSSL)
+
+	// Will use default credential chain if none provided
+	if config.Options["aws_access_key_id"] != "" {
+		awsConfig = awsConfig.WithCredentials(credentials.NewStaticCredentials(config.Options["aws_access_key_id"],
+			config.Options["aws_secret_access_key"], ""))
+	}
+
+	sess, err := session.NewSession(awsConfig)
+
 	if err != nil {
 		return nil, nil, err
 	}
