@@ -14,19 +14,17 @@ GIT_VERSION := $(shell git describe --tags | perl -pe 's/(.*)-([0-9]*)-(g[0-9a-f
 PLUGIN_VERSION_STR="-X github.com/greenplum-db/gpbackup-s3-plugin/s3plugin.Version=$(GIT_VERSION)"
 DEP=$(GOPATH)/bin/dep
 GOLANG_LINTER=$(GOPATH)/bin/golangci-lint
+GINKGO=$(GOPATH)/bin/ginkgo
 
 LINTER_VERSION=1.16.0
-$(GOLANG_LINTER) : $(DEP)
+$(GOLANG_LINTER) :
 		curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v${LINTER_VERSION}
 
-$(DEP) :
-		mkdir -p $(GOPATH)/bin
-		curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+depend :
+		go mod download
 
-depend : $(DEP)
-		dep ensure -v
-		cd vendor/github.com/onsi/ginkgo/ginkgo; go install .
-		cd vendor/golang.org/x/tools/cmd/goimports; go install .
+$(GINKGO) :
+		go get github.com/onsi/ginkgo
 
 format :
 		goimports -w .
@@ -35,20 +33,22 @@ format :
 lint : $(GOLANG_LINTER)
 		golangci-lint run --tests=false
 
-unit : depend
+unit : depend $(GINKGO)
 		ginkgo -r -randomizeSuites -noisySkippings=false -randomizeAllSpecs s3plugin 2>&1
 
 test : unit
 
 build : depend
 		go build -tags '$(S3_PLUGIN)' -o $(BIN_DIR)/$(S3_PLUGIN) -ldflags $(PLUGIN_VERSION_STR)
-		@$(MAKE) install_plugin
 
 build_linux : depend
 		env GOOS=linux GOARCH=amd64 go build -tags '$(S3_PLUGIN)' -o $(S3_PLUGIN) -ldflags $(PLUGIN_VERSION_STR)
 
 build_mac : depend
 		env GOOS=darwin GOARCH=amd64 go build -tags '$(S3_PLUGIN)' -o $(BIN_DIR)/$(S3_PLUGIN) -ldflags $(PLUGIN_VERSION_STR)
+
+install : build
+		@$(MAKE) install_plugin
 
 install_plugin :
 		@psql -t -d template1 -c 'select distinct hostname from gp_segment_configuration' > /tmp/seg_hosts 2>/dev/null; \
