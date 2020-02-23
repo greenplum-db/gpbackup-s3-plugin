@@ -27,14 +27,14 @@ import (
 
 var Version string
 
-const API_VERSION = "0.4.0"
+const ApiVersion = "0.4.0"
 
 type Scope string
 
 const (
 	Master      Scope = "master"
 	SegmentHost Scope = "segment_host"
-	Segment     Scope = "segment"
+	//Segment     Scope = "segment"
 )
 
 const DownloadChunkSize = int64(units.Mebibyte) * 100
@@ -42,38 +42,6 @@ const DownloadChunkSize = int64(units.Mebibyte) * 100
 type PluginConfig struct {
 	ExecutablePath string
 	Options        map[string]string
-}
-
-type S3Manager interface {
-	Delete(bucket, dirPath string) error
-}
-
-type S3Plugin struct {
-	manager S3Manager
-	config  *PluginConfig
-}
-
-func NewS3Plugin(manager S3Manager, config *PluginConfig) *S3Plugin {
-	return &S3Plugin{
-		manager: manager,
-		config:  config,
-	}
-}
-
-func NewS3PluginProduction(c *cli.Context) (*S3Plugin, error) {
-	config, sess, err := readConfigAndStartSession(c)
-	if err != nil {
-		return nil, err
-	}
-
-	prodPlugin := NewS3Plugin(
-		&ProductionS3Manager{
-			service: s3.New(sess),
-			config:  config,
-		},
-		config)
-
-	return prodPlugin, nil
 }
 
 func SetupPluginForBackup(c *cli.Context) error {
@@ -105,6 +73,7 @@ func SetupPluginForRestore(c *cli.Context) error {
 }
 
 func CleanupPlugin(c *cli.Context) error {
+	_ = c
 	return nil
 }
 
@@ -166,7 +135,8 @@ func RestoreData(c *cli.Context) error {
 }
 
 func GetAPIVersion(c *cli.Context) {
-	fmt.Println(API_VERSION)
+	_ = c
+	fmt.Println(ApiVersion)
 }
 
 /*
@@ -288,7 +258,7 @@ func downloadFile(sess *session.Session, bucket string, fileKey string, fileWrit
 	}()
 
 	startByte := int64(0)
-	endByte := int64(DownloadChunkSize - 1)
+	endByte := DownloadChunkSize - 1
 	for currentChunkNo := 0; currentChunkNo < noOfChunks; currentChunkNo++ {
 		if endByte > totalBytes {
 			endByte = totalBytes
@@ -346,7 +316,7 @@ func GetS3Path(folder string, path string) string {
 	return fmt.Sprintf("%s/%s", folder, lastFour)
 }
 
-func (plugin S3Plugin) Delete(c *cli.Context) error {
+func Delete(c *cli.Context) error {
 	timestamp := c.Args().Get(1)
 	if timestamp == "" {
 		return errors.New("delete requires a <timestamp>")
@@ -360,27 +330,24 @@ func (plugin S3Plugin) Delete(c *cli.Context) error {
 	// note that "backups" is a directory is a fact of how we save, choosing
 	// to use the 3 parent directories of the source file. That becomes:
 	// <s3folder>/backups/<date>/<timestamp>
-	deletePath := filepath.Join(plugin.config.Options["folder"], "backups", date, timestamp)
-	bucket := plugin.config.Options["bucket"]
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	deletePath := filepath.Join(config.Options["folder"], "backups", date, timestamp)
+	bucket := config.Options["bucket"]
 
-	return plugin.manager.Delete(bucket, deletePath)
+	service := s3.New(sess)
+	iter := s3manager.NewDeleteListIterator(service, &s3.ListObjectsInput{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(deletePath),
+	})
+
+	batchClient := s3manager.NewBatchDeleteWithClient(service)
+	return batchClient.Delete(aws.BackgroundContext(), iter)
 }
 
 func IsValidTimestamp(timestamp string) bool {
 	timestampFormat := regexp.MustCompile(`^([0-9]{14})$`)
 	return timestampFormat.MatchString(timestamp)
-}
-
-type ProductionS3Manager struct {
-	service *s3.S3
-	config  *PluginConfig
-}
-
-func (d ProductionS3Manager) Delete(bucket, dirPath string) error {
-	iter := s3manager.NewDeleteListIterator(d.service, &s3.ListObjectsInput{
-		Bucket: aws.String(bucket),
-		Prefix: aws.String(dirPath),
-	})
-	batcher := s3manager.NewBatchDeleteWithClient(d.service)
-	return batcher.Delete(aws.BackgroundContext(), iter)
 }

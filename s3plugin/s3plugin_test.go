@@ -4,11 +4,9 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/pkg/errors"
-
+	"github.com/greenplum-db/gpbackup-s3-plugin/s3plugin"
 	"github.com/urfave/cli"
 
-	"github.com/greenplum-db/gpbackup-s3-plugin/s3plugin"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -120,9 +118,7 @@ var _ = Describe("s3_plugin tests", func() {
 		})
 	})
 	Describe("Delete", func() {
-		var plugin *s3plugin.S3Plugin
 		var flags *flag.FlagSet
-		var manager *TestS3Manager
 
 		BeforeEach(func() {
 			flags = flag.NewFlagSet("testing flagset", flag.PanicOnError)
@@ -133,39 +129,13 @@ var _ = Describe("s3_plugin tests", func() {
 			options["aws_secret_access_key"] = "secret"
 			options["bucket"] = "myBucket"
 			options["folder"] = "foo/bar"
-			config := &s3plugin.PluginConfig{
-				ExecutablePath: "myApp",
-				Options:        options,
-			}
-			manager = &TestS3Manager{}
-			plugin = s3plugin.NewS3Plugin(manager, config)
-		})
-		It("calls manager when deleting", func() {
-			err := flags.Parse([]string{"myconfigfilepath", "20000101235959"})
-			Expect(err).ToNot(HaveOccurred())
-			context := cli.NewContext(nil, flags, nil)
-
-			err = plugin.Delete(context)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(manager.bucket).To(Equal("myBucket"))
-			Expect(manager.dirPath).To(Equal("foo/bar/backups/20000101/20000101235959"))
-		})
-		It("returns an error when manager returns error", func() {
-			err := flags.Parse([]string{"myconfigfilepath", "20000101235959"})
-			Expect(err).ToNot(HaveOccurred())
-			context := cli.NewContext(nil, flags, nil)
-			manager.err = errors.New("sample error")
-
-			err = plugin.Delete(context)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("sample error"))
 		})
 		It("returns error when timestamp is not provided", func() {
 			err := flags.Parse([]string{"myconfigfilepath"})
 			Expect(err).ToNot(HaveOccurred())
 			context := cli.NewContext(nil, flags, nil)
 
-			err = plugin.Delete(context)
+			err = s3plugin.Delete(context)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("delete requires a <timestamp>"))
@@ -175,22 +145,10 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			context := cli.NewContext(nil, flags, nil)
 
-			err = plugin.Delete(context)
+			err = s3plugin.Delete(context)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("delete requires a <timestamp> with format YYYYMMDDHHMMSS, but received: badformat"))
 		})
 	})
 })
-
-type TestS3Manager struct {
-	bucket  string
-	dirPath string
-	err     error
-}
-
-func (s3man *TestS3Manager) Delete(bucket, dirPath string) error {
-	s3man.dirPath = dirPath
-	s3man.bucket = bucket
-	return s3man.err
-}

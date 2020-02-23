@@ -68,7 +68,7 @@ func main() {
 		},
 		{
 			Name:   "delete_backup",
-			Action: doDelete,
+			Action: s3plugin.Delete,
 			Before: buildBeforeFunc(2),
 		},
 	}
@@ -78,14 +78,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
-}
-
-func doDelete(c *cli.Context) error {
-	plugin, err := s3plugin.NewS3PluginProduction(c)
-	if err != nil {
-		return err
-	}
-	return plugin.Delete(c)
 }
 
 func buildBeforeFunc(expectedNArgs ...int) (beforeFunc cli.BeforeFunc) {
