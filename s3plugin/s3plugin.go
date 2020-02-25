@@ -27,14 +27,14 @@ import (
 
 var Version string
 
-const ApiVersion = "0.4.0"
+const apiVersion = "0.4.0"
 
 type Scope string
 
 const (
 	Master      Scope = "master"
 	SegmentHost Scope = "segment_host"
-	//Segment     Scope = "segment"
+	Segment     Scope = "segment"
 )
 
 const DownloadChunkSize = int64(units.Mebibyte) * 100
@@ -73,7 +73,6 @@ func SetupPluginForRestore(c *cli.Context) error {
 }
 
 func CleanupPlugin(c *cli.Context) error {
-	_ = c
 	return nil
 }
 
@@ -135,8 +134,7 @@ func RestoreData(c *cli.Context) error {
 }
 
 func GetAPIVersion(c *cli.Context) {
-	_ = c
-	fmt.Println(ApiVersion)
+	fmt.Println(apiVersion)
 }
 
 /*
