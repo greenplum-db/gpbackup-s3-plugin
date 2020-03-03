@@ -2,17 +2,16 @@ package s3plugin
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"bytes"
-	"math"
 	"sync"
 
 	"github.com/alecthomas/units"
@@ -38,8 +37,6 @@ const (
 	SegmentHost Scope = "segment_host"
 	Segment     Scope = "segment"
 )
-
-const DownloadChunkSize = int64(units.Mebibyte) * 100
 
 type PluginConfig struct {
 	ExecutablePath string
@@ -138,8 +135,7 @@ func BackupData(c *cli.Context) error {
 	}
 	dataFile := c.Args().Get(1)
 	fileKey := GetS3Path(config.Options["folder"], dataFile)
-	reader := bufio.NewReader(os.Stdin)
-	totalBytes, err := uploadFile(sess, config.Options["bucket"], fileKey, reader)
+	totalBytes, err := uploadFile(sess, config.Options["bucket"], fileKey, os.Stdin)
 	if err == nil {
 		gplog.Verbose("Uploaded %d bytes for file %s", totalBytes, fileKey)
 	}
@@ -244,15 +240,19 @@ func ShouldEnableEncryption(config *PluginConfig) bool {
 	return !isOff
 }
 
-func uploadFile(sess *session.Session, bucket string, fileKey string, fileReader io.Reader) (int64, error) {
+// 500 MB per part, supporting a file size up to 5TB
+const UploadChunkSize = int64(units.Mebibyte) * 500
+
+func uploadFile(sess *session.Session, bucket string,
+	fileKey string, file *os.File) (int64, error) {
+
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
-		// 500 MB per part, supporting a file size up to 5TB
-		u.PartSize = 500 * 1024 * 1024
+		u.PartSize = UploadChunkSize
 	})
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
-		Body:   fileReader,
+		Body:   bufio.NewReader(file),
 	})
 	if err != nil {
 		return 0, err
@@ -260,10 +260,13 @@ func uploadFile(sess *session.Session, bucket string, fileKey string, fileReader
 	return getFileSize(uploader.S3, bucket, fileKey)
 }
 
+const DownloadChunkSize = int64(units.Mebibyte) * 100
 /*
  * Performs ranged requests for the file while exploiting parallelism between the copy and download tasks
  */
-func downloadFile(sess *session.Session, bucket string, fileKey string, fileWriter io.Writer) (int64, error) {
+func downloadFile(sess *session.Session, bucket string,
+	fileKey string, file *os.File) (int64, error) {
+
 	var finalErr error
 	downloader := s3manager.NewDownloader(sess)
 
@@ -282,7 +285,7 @@ func downloadFile(sess *session.Session, bucket string, fileKey string, fileWrit
 
 	go func() {
 		for currChunk := range copyChannel {
-			_, err = io.Copy(fileWriter, bytes.NewReader(downloadBuffers[currChunk].Bytes()))
+			_, err = io.Copy(file, bytes.NewReader(downloadBuffers[currChunk].Bytes()))
 			if err != nil {
 				finalErr = err
 			}
@@ -336,7 +339,8 @@ func getFileSize(S3 s3iface.S3API, bucket string, fileKey string) (int64, error)
 func GetS3Path(folder string, path string) string {
 	/*
 		a typical path for an already-backed-up file will be stored in a
-		parent directory of a segment, and beneath that, under a datestamp/timestamp/ hierarchy. We assume the incoming path is a long absolute one.
+		parent directory of a segment, and beneath that, under a datestamp/timestamp/
+	    hierarchy. We assume the incoming path is a long absolute one.
 		For example from the test bench:
 		  testdir_for_del="/tmp/testseg/backups/$current_date_for_del/$time_second_for_del"
 		  testfile_for_del="$testdir_for_del/testfile_$time_second_for_del.txt"
@@ -356,7 +360,8 @@ func Delete(c *cli.Context) error {
 	}
 
 	if !IsValidTimestamp(timestamp) {
-		return fmt.Errorf("delete requires a <timestamp> with format YYYYMMDDHHMMSS, but received: %s", timestamp)
+		return fmt.Errorf("delete requires a <timestamp> with format " +
+			"YYYYMMDDHHMMSS, but received: %s", timestamp)
 	}
 
 	date := timestamp[0:8]
