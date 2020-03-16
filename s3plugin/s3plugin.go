@@ -106,6 +106,54 @@ func BackupFile(c *cli.Context) error {
 	return err
 }
 
+func isDirectory(path string) bool {
+	fd, err := os.Stat(path)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	switch mode := fd.Mode(); {
+	case mode.IsDir():
+		return true
+	case mode.IsRegular():
+		return false
+	}
+	return false
+}
+
+func BackupDirectory(c *cli.Context) error {
+	gplog.InitializeLogging("gpbackup", "")
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	dirName := c.Args().Get(1)
+	dirKey := GetS3Path(config.Options["folder"], dirName)
+	fmt.Printf("dirKey = %s\n", dirKey)
+	fileList := make([]string, 0)
+	filepath.Walk(dirName, func(path string, f os.FileInfo, err error) error {
+		if isDirectory(path) {
+			// Do nothing
+			return nil
+		} else {
+			fileList = append(fileList, path)
+			return nil
+		}
+	})
+	for _, fileName := range fileList {
+		file, err := os.Open(fileName)
+		if err != nil {
+			return err
+		}
+		totalBytes, err := uploadFile(sess, config.Options["bucket"], fileName, file)
+		if err == nil {
+			gplog.Verbose("Uploaded %d bytes for %s", totalBytes, fileName)
+		}
+		_ = file.Close()
+	}
+	return err
+}
+
 func RestoreFile(c *cli.Context) error {
 	gplog.InitializeLogging("gprestore", "")
 	config, sess, err := readConfigAndStartSession(c)
@@ -128,6 +176,47 @@ func RestoreFile(c *cli.Context) error {
 	} else {
 		gplog.FatalOnError(err)
 		_ = os.Remove(fileName)
+	}
+	return err
+}
+
+func RestoreDirectory(c *cli.Context) error {
+	gplog.InitializeLogging("gprestore", "")
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	dirName := c.Args().Get(1)
+	bucket := config.Options["bucket"]
+	dirKey := GetS3Path(config.Options["folder"], dirName)
+	_ = os.MkdirAll(dirName, 0775)
+	fmt.Printf("dirKey = %s\n", dirKey)
+	client := s3.New(sess)
+	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &dirKey}
+	bucketObjectsList, _ := client.ListObjectsV2(params)
+
+	for _, key := range bucketObjectsList.Contents {
+		var filename string
+		fmt.Printf("file %s = %d bytes\n", *key.Key, *key.Size)
+		if strings.HasSuffix(*key.Key, "/") {
+			// Got a directory
+			continue
+		}
+		if strings.Contains(*key.Key, "/") {
+			// split
+			s3FileFullPathList := strings.Split(*key.Key, "/")
+			filename = s3FileFullPathList[len(s3FileFullPathList)-1]
+		}
+		filePath := dirName + filename
+		file, err := os.Create(filePath)
+		if err != nil {
+			return err
+		}
+		_, err = downloadFile(sess, config.Options["bucket"], *key.Key, file)
+		if err != nil {
+			_ = os.Remove(filename)
+		}
+		_ = file.Close()
 	}
 	return err
 }
