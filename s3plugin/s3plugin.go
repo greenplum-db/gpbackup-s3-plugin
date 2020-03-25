@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alecthomas/units"
 	"github.com/aws/aws-sdk-go/aws"
@@ -65,7 +66,7 @@ func SetupPluginForBackup(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = uploadFile(sess, config.Options["bucket"], fileKey, file)
+	_, _, err = uploadFile(sess, config.Options["bucket"], fileKey, file)
 	return err
 }
 
@@ -98,9 +99,12 @@ func BackupFile(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	totalBytes, err := uploadFile(sess, config.Options["bucket"], fileKey, file)
+	totalBytes, elapsed, err := uploadFile(sess, config.Options["bucket"], fileKey, file)
 	if err == nil {
-		gplog.Verbose("Uploaded %d bytes for %s", totalBytes, fileKey)
+		msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", totalBytes,
+			filepath.Base(fileName), elapsed.Round(time.Millisecond))
+		gplog.Verbose(msg)
+		fmt.Println(msg)
 	}
 	return err
 }
@@ -127,18 +131,48 @@ func BackupDirectory(c *cli.Context) error {
 		return err
 	}
 	dirName := c.Args().Get(1)
+	fmt.Printf("dirKey = %s\n", dirName)
+	fileList := make([]string, 0)
+	_ = filepath.Walk(dirName, func(path string, f os.FileInfo, err error) error {
+		isDir, _ := isDirectoryGetSize(path)
+		if !isDir {
+			fileList = append(fileList, path)
+		}
+		return nil
+	})
+	for _, fileName := range fileList {
+		file, err := os.Open(fileName)
+		if err != nil {
+			return err
+		}
+		totalBytes, elapsed, err := uploadFile(sess, config.Options["bucket"], fileName, file)
+		if err == nil {
+			msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", totalBytes,
+				filepath.Base(fileName), elapsed.Round(time.Millisecond))
+			gplog.Verbose(msg)
+			fmt.Println(msg)
+		}
+		_ = file.Close()
+	}
+	return err
+}
+
+func BackupDirectoryParallel(c *cli.Context) error {
+	gplog.InitializeLogging("gpbackup", "")
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	dirName := c.Args().Get(1)
 	bucket := config.Options["bucket"]
-	folder := config.Options["folder"]
-	dirKey := folder + "/" + dirName
 	gplog.Verbose("Backup Directory '%s' to S3", dirName)
-	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirKey)
+	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
 
 	// Create a list of files to be backed up
 	fileList := make([]string, 0)
 	_ = filepath.Walk(dirName, func(path string, f os.FileInfo, err error) error {
-		isDir, size := isDirectoryGetSize(path)
+		isDir, _ := isDirectoryGetSize(path)
 		if !isDir {
-			gplog.Verbose("File '%s' = %d bytes", filepath.Base(path), size)
 			fileList = append(fileList, path)
 		}
 		return nil
@@ -149,17 +183,19 @@ func BackupDirectory(c *cli.Context) error {
 	var finalErr error
 	for _, fileName := range fileList {
 		wg.Add(1)
-		go func(fileName string) {
+		go func(fileKey string) {
 			defer wg.Done()
-			file, err := os.Open(fileName)
+			file, err := os.Open(fileKey)
 			if err != nil {
 				finalErr = err
 				return
 			}
-			fileKey := folder + "/" + fileName
-			totalBytes, err := uploadFile(sess, bucket, fileKey, file)
+			totalBytes, elapsed, err := uploadFile(sess, bucket, fileKey, file)
 			if err == nil {
-				gplog.Verbose("Uploaded %d bytes for %s", totalBytes, filepath.Base(fileName))
+				msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", totalBytes,
+					filepath.Base(fileName), elapsed.Round(time.Millisecond))
+				gplog.Verbose(msg)
+				fmt.Println(msg)
 			} else {
 				finalErr = err
 			}
@@ -185,8 +221,13 @@ func RestoreFile(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = downloadFile(sess, config.Options["bucket"], fileKey, file)
-	if err != nil {
+	totalBytes, elapsed, err := downloadFile(sess, config.Options["bucket"], fileKey, file)
+	if err == nil {
+		msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", totalBytes,
+			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
+		gplog.Verbose(msg)
+		fmt.Println(msg)
+	} else {
 		_ = os.Remove(fileName)
 	}
 	return err
@@ -194,19 +235,76 @@ func RestoreFile(c *cli.Context) error {
 
 func RestoreDirectory(c *cli.Context) error {
 	gplog.InitializeLogging("gprestore", "")
+	start := time.Now()
+	total := int64(0)
 	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		fmt.Printf("Downloaded %d bytes in %v\n", total,
+			time.Since(start).Round(time.Millisecond))
+	}()
 	dirName := c.Args().Get(1)
 	bucket := config.Options["bucket"]
-	folder := config.Options["folder"]
-	dirKey := folder + "/" + dirName
 	gplog.Verbose("Restore Directory '%s' from S3", dirName)
-	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirKey)
+	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
+	_ = os.MkdirAll(dirName, 0775)
+	fmt.Printf("dirKey = %s\n", dirName)
+	client := s3.New(sess)
+	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &dirName}
+	bucketObjectsList, _ := client.ListObjectsV2(params)
+
+	for _, key := range bucketObjectsList.Contents {
+		var filename string
+		if strings.HasSuffix(*key.Key, "/") {
+			// Got a directory
+			continue
+		}
+		if strings.Contains(*key.Key, "/") {
+			// split
+			s3FileFullPathList := strings.Split(*key.Key, "/")
+			filename = s3FileFullPathList[len(s3FileFullPathList)-1]
+		}
+		filePath := dirName + "/" + filename
+		file, err := os.Create(filePath)
+		if err != nil {
+			return err
+		}
+		totalBytes, elapsed, err := downloadFile(sess, config.Options["bucket"], *key.Key, file)
+		if err == nil {
+			total += totalBytes
+			msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", totalBytes,
+				filepath.Base(*key.Key), elapsed.Round(time.Millisecond))
+			gplog.Verbose(msg)
+			fmt.Println(msg)
+		} else {
+			_ = os.Remove(filename)
+		}
+		_ = file.Close()
+	}
+	return err
+}
+
+func RestoreDirectoryParallel(c *cli.Context) error {
+	gplog.InitializeLogging("gprestore", "")
+	start := time.Now()
+	total := int64(0)
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		fmt.Printf("Downloaded %d bytes in %v\n", total,
+			time.Since(start).Round(time.Millisecond))
+	}()
+	dirName := c.Args().Get(1)
+	bucket := config.Options["bucket"]
+	gplog.Verbose("Restore Directory '%s' from S3", dirName)
+	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
 	_ = os.MkdirAll(dirName, 0775)
 	client := s3.New(sess)
-	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &dirKey}
+	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &dirName}
 	bucketObjectsList, _ := client.ListObjectsV2(params)
 
 	// Create a list of files to be restored
@@ -238,9 +336,13 @@ func RestoreDirectory(c *cli.Context) error {
 				finalErr = err
 				return
 			}
-			totalBytes, err := downloadFile(sess, bucket, fileKey, file)
+			totalBytes, elapsed, err := downloadFile(sess, bucket, fileKey, file)
 			if err == nil {
-				gplog.Verbose("Downloaded %d bytes for file %s", totalBytes, fileName)
+				total += totalBytes
+				msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", totalBytes,
+					filepath.Base(fileKey), elapsed.Round(time.Millisecond))
+				gplog.Verbose(msg)
+				fmt.Println(msg)
 			} else {
 				finalErr = err
 				_ = os.Remove(filePath)
@@ -260,9 +362,10 @@ func BackupData(c *cli.Context) error {
 	}
 	dataFile := c.Args().Get(1)
 	fileKey := GetS3Path(config.Options["folder"], dataFile)
-	totalBytes, err := uploadFile(sess, config.Options["bucket"], fileKey, os.Stdin)
+	totalBytes, elapsed, err := uploadFile(sess, config.Options["bucket"], fileKey, os.Stdin)
 	if err == nil {
-		gplog.Verbose("Uploaded %d bytes for file %s", totalBytes, fileKey)
+		gplog.Verbose("Uploaded %d bytes for file %s in %v", totalBytes,
+			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
 	}
 	return err
 }
@@ -275,9 +378,10 @@ func RestoreData(c *cli.Context) error {
 	}
 	dataFile := c.Args().Get(1)
 	fileKey := GetS3Path(config.Options["folder"], dataFile)
-	totalBytes, err := downloadFile(sess, config.Options["bucket"], fileKey, os.Stdout)
+	totalBytes, elapsed, err := downloadFile(sess, config.Options["bucket"], fileKey, os.Stdout)
 	if err == nil {
-		gplog.Verbose("Downloaded %d bytes for file %s", totalBytes, fileKey)
+		gplog.Verbose("Downloaded %d bytes for file %s in %v", totalBytes,
+			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
 	}
 	return err
 }
@@ -368,9 +472,10 @@ func ShouldEnableEncryption(config *PluginConfig) bool {
 // 500 MB per part, supporting a file size up to 5TB
 const UploadChunkSize = int64(units.Mebibyte) * 500
 
-func uploadFile(sess *session.Session, bucket string,
-	fileKey string, file *os.File) (int64, error) {
+func uploadFile(sess *session.Session, bucket string, fileKey string,
+	file *os.File) (int64, time.Duration, error) {
 
+	start := time.Now()
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
 		u.PartSize = UploadChunkSize
 	})
@@ -380,24 +485,26 @@ func uploadFile(sess *session.Session, bucket string,
 		Body:   bufio.NewReader(file),
 	})
 	if err != nil {
-		return 0, err
+		return 0, -1, err
 	}
-	return getFileSize(uploader.S3, bucket, fileKey)
+	totalBytes, err := getFileSize(uploader.S3, bucket, fileKey)
+    return totalBytes, time.Since(start), err
 }
 
 const DownloadChunkSize = int64(units.Mebibyte) * 100
 /*
  * Performs ranged requests for the file while exploiting parallelism between the copy and download tasks
  */
-func downloadFile(sess *session.Session, bucket string,
-	fileKey string, file *os.File) (int64, error) {
+func downloadFile(sess *session.Session, bucket string, fileKey string,
+	file *os.File) (int64, time.Duration, error) {
 
 	var finalErr error
+	start := time.Now()
 	downloader := s3manager.NewDownloader(sess)
 
 	totalBytes, err := getFileSize(downloader.S3, bucket, fileKey)
 	if err != nil {
-		return 0, err
+		return 0, -1, err
 	}
 	noOfChunks := int(math.Ceil(float64(totalBytes) / float64(DownloadChunkSize)))
 	downloadBuffers := make([]*aws.WriteAtBuffer, noOfChunks)
@@ -410,10 +517,14 @@ func downloadFile(sess *session.Session, bucket string,
 
 	go func() {
 		for currChunk := range copyChannel {
-			_, err = io.Copy(file, bytes.NewReader(downloadBuffers[currChunk].Bytes()))
+			chunkStart := time.Now()
+			numBytes, err := io.Copy(file, bytes.NewReader(downloadBuffers[currChunk].Bytes()))
 			if err != nil {
 				finalErr = err
 			}
+			gplog.Verbose("Copied %d bytes (chunk %d) for %s in %v",
+				numBytes, currChunk, filepath.Base(fileKey),
+				time.Since(chunkStart).Round(time.Millisecond))
 			waitGroup.Done()
 		}
 	}()
@@ -424,6 +535,7 @@ func downloadFile(sess *session.Session, bucket string,
 		if endByte > totalBytes {
 			endByte = totalBytes
 		}
+		chunkStart := time.Now()
 		_, err := downloader.Download(downloadBuffers[currentChunkNo], &s3.GetObjectInput{
 			Bucket: aws.String(bucket),
 			Key:    aws.String(fileKey),
@@ -433,19 +545,19 @@ func downloadFile(sess *session.Session, bucket string,
 			finalErr = err
 			break
 		}
-
+		gplog.Verbose("Downloaded %d bytes (chunk %d) for %s in %v",
+			endByte - startByte + 1, currentChunkNo, filepath.Base(fileKey),
+			time.Since(chunkStart).Round(time.Millisecond))
 		waitGroup.Add(1)
-
 		copyChannel <- currentChunkNo
 
 		startByte += DownloadChunkSize
 		endByte += DownloadChunkSize
 	}
 	close(copyChannel)
-
 	waitGroup.Wait()
 
-	return totalBytes, finalErr
+	return totalBytes, time.Since(start), finalErr
 }
 
 func getFileSize(S3 s3iface.S3API, bucket string, fileKey string) (int64, error) {

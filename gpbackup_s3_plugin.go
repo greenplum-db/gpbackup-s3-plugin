@@ -54,6 +54,12 @@ func main() {
 			Hidden: true,
 		},
 		{
+			Name:   "backup_directory_parallel",
+			Action: s3plugin.BackupDirectoryParallel,
+			Before: buildBeforeFunc(2),
+			Hidden: true,
+		},
+		{
 			Name:   "restore_file",
 			Action: s3plugin.RestoreFile,
 			Before: buildBeforeFunc(2),
@@ -61,6 +67,12 @@ func main() {
 		{
 			Name:   "restore_directory",
 			Action: s3plugin.RestoreDirectory,
+			Before: buildBeforeFunc(2),
+			Hidden: true,
+		},
+		{
+			Name:   "restore_directory_parallel",
+			Action: s3plugin.RestoreDirectoryParallel,
 			Before: buildBeforeFunc(2),
 			Hidden: true,
 		},
