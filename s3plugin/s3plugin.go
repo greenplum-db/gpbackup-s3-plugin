@@ -221,6 +221,11 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 	}
 	disableSSL := !ShouldEnableEncryption(config)
 
+	verbosity := gplog.LOGINFO
+	if config.Options["debug"] == "true" {
+		verbosity = gplog.LOGVERBOSE
+	}
+	gplog.SetVerbosity(verbosity)
 	awsConfig := aws.NewConfig().
 		WithRegion(config.Options["region"]).
 		WithEndpoint(config.Options["endpoint"]).
@@ -368,9 +373,12 @@ func Delete(c *cli.Context) error {
 		return errors.New("delete requires a <timestamp>")
 	}
 
+	gplog.InitializeLogging("gpbackup", "")
 	if !IsValidTimestamp(timestamp) {
-		return fmt.Errorf("delete requires a <timestamp> with format " +
+		msg := fmt.Sprintf("delete requires a <timestamp> with format " +
 			"YYYYMMDDHHMMSS, but received: %s", timestamp)
+		gplog.Error(msg)
+		return fmt.Errorf(msg)
 	}
 
 	date := timestamp[0:8]
@@ -383,6 +391,7 @@ func Delete(c *cli.Context) error {
 	}
 	deletePath := filepath.Join(config.Options["folder"], "backups", date, timestamp)
 	bucket := config.Options["bucket"]
+	gplog.Info("Delete location = s3://%s/%s", bucket, deletePath)
 
 	service := s3.New(sess)
 	iter := s3manager.NewDeleteListIterator(service, &s3.ListObjectsInput{
