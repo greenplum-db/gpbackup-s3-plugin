@@ -380,7 +380,10 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 	for i := 0; i < numberOfWorkers; i++ {
 		go func(id int) {
 			for j := range jobs {
-				chunkStart := time.Now()
+				var chunkStart time.Time
+				if gplog.GetLogFileVerbosity() >= gplog.LOGVERBOSE {
+					chunkStart = time.Now()
+				}
 				byteRange := fmt.Sprintf("bytes=%d-%d", j.startByte, j.endByte)
 				chunkBytes, err := downloader.Download(
 					downloadBuffers[j.chunkIndex],
@@ -392,9 +395,11 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 				if err != nil {
 					finalErr = err
 				}
-				gplog.Verbose("Worker %d Downloaded %d bytes (chunk %d) for %s in %v",
-					id, chunkBytes, j.chunkIndex, filepath.Base(fileKey),
-					time.Since(chunkStart).Round(time.Millisecond))
+				if gplog.GetLogFileVerbosity() >= gplog.LOGVERBOSE {
+					gplog.Verbose("Worker %d Downloaded %d bytes (chunk %d) for %s in %v",
+						id, chunkBytes, j.chunkIndex, filepath.Base(fileKey),
+						time.Since(chunkStart).Round(time.Millisecond))
+				}
 				copyChannel[j.chunkIndex] <- j.chunkIndex
 				time.Sleep(time.Millisecond * 10)
 			}
@@ -405,14 +410,19 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 	go func() {
 		for i := range copyChannel {
 			currentChunk := <- copyChannel[i]
-			chunkStart := time.Now()
+			var chunkStart time.Time
+			if gplog.GetLogFileVerbosity() >= gplog.LOGVERBOSE {
+				chunkStart = time.Now()
+			}
 			numBytes, err := file.Write(downloadBuffers[currentChunk].Bytes())
 			if err != nil {
 				finalErr = err
 			}
-			gplog.Verbose("Copied %d bytes (chunk %d) for %s in %v",
-				numBytes, currentChunk, filepath.Base(fileKey),
-				time.Since(chunkStart).Round(time.Millisecond))
+			if gplog.GetLogFileVerbosity() >= gplog.LOGVERBOSE {
+				gplog.Verbose("Copied %d bytes (chunk %d) for %s in %v",
+					numBytes, currentChunk, filepath.Base(fileKey),
+					time.Since(chunkStart).Round(time.Millisecond))
+			}
 			waitGroup.Done()
 			close(copyChannel[i])
 		}
