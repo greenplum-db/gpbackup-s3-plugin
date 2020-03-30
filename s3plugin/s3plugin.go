@@ -223,7 +223,7 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 
 	verbosity := gplog.LOGINFO
 	if config.Options["debug"] == "true" {
-		verbosity = gplog.LOGVERBOSE
+		verbosity = gplog.LOGDEBUG
 	}
 	gplog.SetVerbosity(verbosity)
 	awsConfig := aws.NewConfig().
@@ -391,7 +391,7 @@ func Delete(c *cli.Context) error {
 	}
 	deletePath := filepath.Join(config.Options["folder"], "backups", date, timestamp)
 	bucket := config.Options["bucket"]
-	gplog.Info("Delete location = s3://%s/%s", bucket, deletePath)
+	gplog.Debug("Delete location = s3://%s/%s", bucket, deletePath)
 
 	service := s3.New(sess)
 	iter := s3manager.NewDeleteListIterator(service, &s3.ListObjectsInput{
