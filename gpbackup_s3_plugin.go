@@ -1,5 +1,3 @@
-// +build gpbackup_s3_plugin
-
 package main
 
 import (
