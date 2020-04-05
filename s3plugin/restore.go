@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,9 +43,9 @@ func RestoreFile(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	totalBytes, elapsed, err := downloadFile(sess, bucket, fileKey, file)
+	bytes, elapsed, err := downloadFile(sess, bucket, fileKey, file)
 	if err == nil {
-		msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", totalBytes,
+		msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", bytes,
 			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
 		gplog.Verbose(msg)
 		fmt.Println(msg)
@@ -58,25 +59,23 @@ func RestoreFile(c *cli.Context) error {
 func RestoreDirectory(c *cli.Context) error {
 	gplog.InitializeLogging("gprestore", "")
 	start := time.Now()
-	total := int64(0)
+	totalBytes := int64(0)
 	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		fmt.Printf("Downloaded %d bytes in %v\n", total,
-			time.Since(start).Round(time.Millisecond))
-	}()
 	dirName := c.Args().Get(1)
 	bucket := config.Options["bucket"]
 	gplog.Verbose("Restore Directory '%s' from S3", dirName)
 	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
-	_ = os.MkdirAll(dirName, 0775)
 	fmt.Printf("dirKey = %s\n", dirName)
+
+	_ = os.MkdirAll(dirName, 0775)
 	client := s3.New(sess)
 	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &dirName}
 	bucketObjectsList, _ := client.ListObjectsV2(params)
 
+	numFiles := 0
 	for _, key := range bucketObjectsList.Contents {
 		var filename string
 		if strings.HasSuffix(*key.Key, "/") {
@@ -93,10 +92,11 @@ func RestoreDirectory(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		totalBytes, elapsed, err := downloadFile(sess, bucket, *key.Key, file)
+		bytes, elapsed, err := downloadFile(sess, bucket, *key.Key, file)
 		if err == nil {
-			total += totalBytes
-			msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", totalBytes,
+			totalBytes += bytes
+			numFiles++
+			msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", bytes,
 				filepath.Base(*key.Key), elapsed.Round(time.Millisecond))
 			gplog.Verbose(msg)
 			fmt.Println(msg)
@@ -106,31 +106,37 @@ func RestoreDirectory(c *cli.Context) error {
 		}
 		_ = file.Close()
 	}
+
+	fmt.Printf("Downloaded %d files (%d bytes) in %v\n",
+		numFiles, totalBytes, time.Since(start).Round(time.Millisecond))
 	return err
 }
 
 func RestoreDirectoryParallel(c *cli.Context) error {
 	gplog.InitializeLogging("gprestore", "")
 	start := time.Now()
-	total := int64(0)
+	totalBytes := int64(0)
+	parallel := 5
 	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		fmt.Printf("Downloaded %d bytes in %v\n", total,
-			time.Since(start).Round(time.Millisecond))
-	}()
 	dirName := c.Args().Get(1)
+	if len(c.Args()) == 3 {
+		parallel, _ = strconv.Atoi(c.Args().Get(2))
+	}
 	bucket := config.Options["bucket"]
 	gplog.Verbose("Restore Directory Parallel '%s' from S3", dirName)
 	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
+	fmt.Printf("dirKey = %s\n", dirName)
+
 	_ = os.MkdirAll(dirName, 0775)
 	client := s3.New(sess)
 	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &dirName}
 	bucketObjectsList, _ := client.ListObjectsV2(params)
 
 	// Create a list of files to be restored
+	numFiles := 0
 	fileList := make([]string, 0)
 	for _, key := range bucketObjectsList.Contents {
 		gplog.Verbose("File '%s' = %d bytes", filepath.Base(*key.Key), *key.Size)
@@ -141,41 +147,53 @@ func RestoreDirectoryParallel(c *cli.Context) error {
 		fileList = append(fileList, *key.Key)
 	}
 
-	// Process the files in parallel
 	var wg sync.WaitGroup
 	var finalErr error
+	// Create jobs using a channel
+	fileChannel := make(chan string, len(fileList))
 	for _, fileKey := range fileList {
 		wg.Add(1)
-		go func(fileKey string) {
-			defer wg.Done()
-			fileName := fileKey
-			if strings.Contains(fileKey, "/") {
-				fileName = filepath.Base(fileKey)
-			}
-			// construct local file name
-			filePath := dirName + "/" + fileName
-			file, err := os.Create(filePath)
-			if err != nil {
-				finalErr = err
-				return
-			}
-			totalBytes, elapsed, err := downloadFile(sess, bucket, fileKey, file)
-			if err == nil {
-				total += totalBytes
-				msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", totalBytes,
-					filepath.Base(fileKey), elapsed.Round(time.Millisecond))
-				gplog.Verbose(msg)
-				fmt.Println(msg)
-			} else {
-				finalErr = err
-				gplog.FatalOnError(err)
-				_ = os.Remove(filePath)
-			}
-			_ = file.Close()
-		}(fileKey)
+		fileChannel <- fileKey
 	}
-
+	close(fileChannel)
+	// Process the files in parallel
+	for i := 0; i < parallel; i++ {
+		go func (jobs chan string) {
+			for fileKey := range jobs {
+				fileName := fileKey
+				if strings.Contains(fileKey, "/") {
+					fileName = filepath.Base(fileKey)
+				}
+				// construct local file name
+				filePath := dirName + "/" + fileName
+				file, err := os.Create(filePath)
+				if err != nil {
+					finalErr = err
+					return
+				}
+				bytes, elapsed, err := downloadFile(sess, bucket, fileKey, file)
+				if err == nil {
+					totalBytes += bytes
+					numFiles++
+					msg := fmt.Sprintf("Downloaded %d bytes for %s in %v", bytes,
+						filepath.Base(fileKey), elapsed.Round(time.Millisecond))
+					gplog.Verbose(msg)
+					fmt.Println(msg)
+				} else {
+					finalErr = err
+					gplog.FatalOnError(err)
+					_ = os.Remove(filePath)
+				}
+				_ = file.Close()
+				wg.Done()
+			}
+		}(fileChannel)
+	}
+	// Wait for jobs to be done
 	wg.Wait()
+
+	fmt.Printf("Downloaded %d files (%d bytes) in %v\n",
+		numFiles, totalBytes, time.Since(start).Round(time.Millisecond))
 	return finalErr
 }
 
@@ -188,9 +206,9 @@ func RestoreData(c *cli.Context) error {
 	dataFile := c.Args().Get(1)
 	bucket := config.Options["bucket"]
 	fileKey := GetS3Path(config.Options["folder"], dataFile)
-	totalBytes, elapsed, err := downloadFile(sess, bucket, fileKey, os.Stdout)
+	bytes, elapsed, err := downloadFile(sess, bucket, fileKey, os.Stdout)
 	if err == nil {
-		gplog.Verbose("Downloaded %d bytes for file %s in %v", totalBytes,
+		gplog.Verbose("Downloaded %d bytes for file %s in %v", bytes,
 			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
 	} else {
 		gplog.FatalOnError(err)

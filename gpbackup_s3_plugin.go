@@ -48,13 +48,13 @@ func main() {
 		{
 			Name:   "backup_directory",
 			Action: s3plugin.BackupDirectory,
-			Before: buildBeforeFunc(2),
+			Before: buildBeforeFunc(2, 3),
 			Hidden: true,
 		},
 		{
 			Name:   "backup_directory_parallel",
 			Action: s3plugin.BackupDirectoryParallel,
-			Before: buildBeforeFunc(2),
+			Before: buildBeforeFunc(2, 3),
 			Hidden: true,
 		},
 		{
@@ -65,13 +65,13 @@ func main() {
 		{
 			Name:   "restore_directory",
 			Action: s3plugin.RestoreDirectory,
-			Before: buildBeforeFunc(2),
+			Before: buildBeforeFunc(2, 3),
 			Hidden: true,
 		},
 		{
 			Name:   "restore_directory_parallel",
 			Action: s3plugin.RestoreDirectoryParallel,
-			Before: buildBeforeFunc(2),
+			Before: buildBeforeFunc(2, 3),
 			Hidden: true,
 		},
 		{
@@ -96,9 +96,8 @@ func main() {
 		},
 	}
 
-	err := app.Run(os.Args)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
+	if err := app.Run(os.Args); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 }
@@ -114,7 +113,7 @@ func buildBeforeFunc(expectedNArgs ...int) (beforeFunc cli.BeforeFunc) {
 			}
 		}
 		if !argMatched {
-			return fmt.Errorf("Invalid number of arguments to plugin command. "+
+			return fmt.Errorf("ERROR: Invalid number of arguments to plugin command. " +
 				"Expected %v arguments. Got %d arguments", expectedNArgs, actualNArg)
 		} else {
 			return nil
