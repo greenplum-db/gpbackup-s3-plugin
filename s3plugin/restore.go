@@ -264,7 +264,7 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 	start := time.Now()
 	waitGroup := sync.WaitGroup{}
 	numberOfChunks := calculateNumChunks(totalBytes)
-	downloadBuffers := make([]*aws.WriteAtBuffer, numberOfChunks)
+	downloadBuffers := make([][]byte, numberOfChunks)
 	copyChannel := make([]chan int, numberOfChunks)
 	jobs := make(chan chunk, numberOfChunks)
 	for i := 0; i < numberOfChunks; i++ {
@@ -282,12 +282,7 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 			endByte = totalBytes - 1
 			done = true
 		}
-		downloadBuffers[chunkIndex] = &aws.WriteAtBuffer{GrowthCoeff: 2}
-		jobs <- chunk{
-			chunkIndex,
-			startByte,
-			endByte,
-		}
+		jobs <- chunk{chunkIndex, startByte, endByte}
 		waitGroup.Add(1)
 	}
 
@@ -304,8 +299,10 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 					chunkStart = time.Now()
 				}
 				byteRange := fmt.Sprintf("bytes=%d-%d", j.startByte, j.endByte)
+				// Allocate buffer for download
+				downloadBuffers[j.chunkIndex] = make([]byte, j.endByte - j.startByte + 1)
 				chunkBytes, err := downloader.Download(
-					downloadBuffers[j.chunkIndex],
+					aws.NewWriteAtBuffer(downloadBuffers[j.chunkIndex]),
 					&s3.GetObjectInput{
 						Bucket: aws.String(bucket),
 						Key:    aws.String(fileKey),
@@ -333,7 +330,7 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 			if gplog.GetLogFileVerbosity() >= gplog.LOGVERBOSE {
 				chunkStart = time.Now()
 			}
-			numBytes, err := file.Write(downloadBuffers[currentChunk].Bytes())
+			numBytes, err := file.Write(downloadBuffers[currentChunk])
 			if err != nil {
 				finalErr = err
 			}
@@ -342,6 +339,8 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 					numBytes, currentChunk, filepath.Base(fileKey),
 					time.Since(chunkStart).Round(time.Millisecond))
 			}
+			// Deallocate buffer
+			downloadBuffers[currentChunk] = nil
 			waitGroup.Done()
 			close(copyChannel[i])
 		}
@@ -350,4 +349,3 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 	waitGroup.Wait()
 	return totalBytes, time.Since(start), finalErr
 }
-
