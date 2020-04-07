@@ -56,9 +56,6 @@ build_mac : depend
 		env GOOS=darwin GOARCH=amd64 $(GO_ENV) go build -o $(BIN_DIR)/$(S3_PLUGIN) -ldflags $(PLUGIN_VERSION_STR)
 
 install : build
-		@$(MAKE) install_plugin
-
-install_plugin :
 		@psql -t -d template1 -c 'select distinct hostname from gp_segment_configuration' > /tmp/seg_hosts 2>/dev/null; \
 		if [ $$? -eq 0 ]; then \
 			gpscp -f /tmp/seg_hosts $(BIN_DIR)/$(S3_PLUGIN) =:$(GPHOME)/bin/$(S3_PLUGIN); \

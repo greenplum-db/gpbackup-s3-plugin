@@ -113,7 +113,7 @@ func buildBeforeFunc(expectedNArgs ...int) (beforeFunc cli.BeforeFunc) {
 			}
 		}
 		if !argMatched {
-			return fmt.Errorf("ERROR: Invalid number of arguments to plugin command. " +
+			return fmt.Errorf("ERROR: Invalid number of arguments to plugin command. "+
 				"Expected %v arguments. Got %d arguments", expectedNArgs, actualNArg)
 		} else {
 			return nil

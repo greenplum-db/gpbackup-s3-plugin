@@ -158,7 +158,7 @@ func RestoreDirectoryParallel(c *cli.Context) error {
 	close(fileChannel)
 	// Process the files in parallel
 	for i := 0; i < parallel; i++ {
-		go func (jobs chan string) {
+		go func(jobs chan string) {
 			for fileKey := range jobs {
 				fileName := fileKey
 				if strings.Contains(fileKey, "/") {
@@ -217,11 +217,11 @@ func RestoreData(c *cli.Context) error {
 }
 
 /*
-     8 MB starting chunk where each subsequent chunk increments by 1MB
-     AWS only allows upto 10000 chunks with Max file size of 5TB
-     The limit would be reached at chunk number 3155 in our case
-     Chunk sizes = 8, 9, 10, ..., 3155
- */
+   8 MB starting chunk where each subsequent chunk increments by 1MB
+   AWS only allows upto 10000 chunks with Max file size of 5TB
+   The limit would be reached at chunk number 3155 in our case
+   Chunk sizes = 8, 9, 10, ..., 3155
+*/
 const DownloadChunkSize = int64(Mebibyte) * 8
 const DownloadChunkIncrement = int64(Mebibyte) * 1
 const Concurrency = 6
@@ -318,7 +318,7 @@ func downloadFileInParallel(downloader *s3manager.Downloader, totalBytes int64,
 				}
 				byteRange := fmt.Sprintf("bytes=%d-%d", j.startByte, j.endByte)
 				// Allocate buffer for download
-				downloadBuffers[j.chunkIndex] = make([]byte, j.endByte - j.startByte + 1)
+				downloadBuffers[j.chunkIndex] = make([]byte, j.endByte-j.startByte+1)
 				chunkBytes, err := downloader.Download(
 					aws.NewWriteAtBuffer(downloadBuffers[j.chunkIndex]),
 					&s3.GetObjectInput{

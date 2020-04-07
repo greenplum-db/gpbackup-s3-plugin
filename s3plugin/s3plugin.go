@@ -160,15 +160,15 @@ func getFileSize(S3 s3iface.S3API, bucket string, fileKey string) (int64, error)
 
 func GetS3Path(folder string, path string) string {
 	/*
-		a typical path for an already-backed-up file will be stored in a
-		parent directory of a segment, and beneath that, under a datestamp/timestamp/
-	    hierarchy. We assume the incoming path is a long absolute one.
-		For example from the test bench:
-		  testdir_for_del="/tmp/testseg/backups/$current_date_for_del/$time_second_for_del"
-		  testfile_for_del="$testdir_for_del/testfile_$time_second_for_del.txt"
+			a typical path for an already-backed-up file will be stored in a
+			parent directory of a segment, and beneath that, under a datestamp/timestamp/
+		    hierarchy. We assume the incoming path is a long absolute one.
+			For example from the test bench:
+			  testdir_for_del="/tmp/testseg/backups/$current_date_for_del/$time_second_for_del"
+			  testfile_for_del="$testdir_for_del/testfile_$time_second_for_del.txt"
 
-		Therefore, the incoming path is relevant to S3 in only the last four segments,
-		which indicate the file and its 2 date/timestamp parents, and the grandparent "backups"
+			Therefore, the incoming path is relevant to S3 in only the last four segments,
+			which indicate the file and its 2 date/timestamp parents, and the grandparent "backups"
 	*/
 	pathArray := strings.Split(path, "/")
 	lastFour := strings.Join(pathArray[(len(pathArray)-4):], "/")
@@ -183,7 +183,7 @@ func Delete(c *cli.Context) error {
 
 	gplog.InitializeLogging("gpbackup", "")
 	if !IsValidTimestamp(timestamp) {
-		msg := fmt.Sprintf("delete requires a <timestamp> with format " +
+		msg := fmt.Sprintf("delete requires a <timestamp> with format "+
 			"YYYYMMDDHHMMSS, but received: %s", timestamp)
 		gplog.Error(msg)
 		return fmt.Errorf(msg)

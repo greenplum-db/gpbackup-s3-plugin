@@ -157,7 +157,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 	close(fileChannel)
 	// Process the files in parallel
 	for i := 0; i < parallel; i++ {
-		go func (jobs chan string) {
+		go func(jobs chan string) {
 			for fileKey := range jobs {
 				file, err := os.Open(fileKey)
 				if err != nil {
