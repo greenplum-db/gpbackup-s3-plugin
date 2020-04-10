@@ -224,7 +224,6 @@ func RestoreData(c *cli.Context) error {
 */
 const DownloadChunkSize = int64(Mebibyte) * 8
 const DownloadChunkIncrement = int64(Mebibyte) * 1
-const Concurrency = 6
 
 type chunk struct {
 	chunkIndex int

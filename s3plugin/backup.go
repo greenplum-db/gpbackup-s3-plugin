@@ -207,7 +207,7 @@ func BackupData(c *cli.Context) error {
 	return err
 }
 
-const UploadChunkSize = int64(Mebibyte) * 500
+const UploadChunkSize = int64(Mebibyte) * 10
 
 func uploadFile(sess *session.Session, bucket string, fileKey string,
 	file *os.File) (int64, time.Duration, error) {
@@ -215,11 +215,12 @@ func uploadFile(sess *session.Session, bucket string, fileKey string,
 	start := time.Now()
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
 		u.PartSize = UploadChunkSize
+		u.Concurrency = Concurrency
 	})
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
-		Body:   bufio.NewReader(file),
+		Body:   bufio.NewReaderSize(file, int(UploadChunkSize) * Concurrency),
 	})
 	if err != nil {
 		return 0, -1, err
