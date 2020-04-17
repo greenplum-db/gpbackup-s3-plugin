@@ -91,7 +91,7 @@ func main() {
 		},
 		{
 			Name:   "delete_backup",
-			Action: s3plugin.Delete,
+			Action: s3plugin.DeleteBackup,
 			Before: buildBeforeFunc(2),
 		},
 	}

@@ -34,6 +34,11 @@ const (
 	Segment     Scope = "segment"
 )
 
+const (
+	Gpbackup  string = "Gpbackup"
+	Gprestore string = "Gprestore"
+)
+
 type PluginConfig struct {
 	ExecutablePath string
 	Options        map[string]string
@@ -92,7 +97,7 @@ func ValidateConfig(config *PluginConfig) error {
 	return nil
 }
 
-func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session, error) {
+func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig, *session.Session, error) {
 	configPath := c.Args().Get(0)
 	config, err := readAndValidatePluginConfig(configPath)
 	if err != nil {
@@ -100,11 +105,7 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 	}
 	disableSSL := !ShouldEnableEncryption(config)
 
-	verbosity := gplog.LOGINFO
-	if config.Options["debug"] == "true" {
-		verbosity = gplog.LOGDEBUG
-	}
-	gplog.SetVerbosity(verbosity)
+	ShouldEnableDebug(config, operation)
 	awsConfig := aws.NewConfig().
 		WithRegion(config.Options["region"]).
 		WithEndpoint(config.Options["endpoint"]).
@@ -124,6 +125,19 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 		return nil, nil, err
 	}
 	return config, sess, nil
+}
+
+func ShouldEnableDebug(config *PluginConfig, operation string) {
+	gplog.InitializeLogging(operation, "")
+	verbosity := gplog.LOGINFO
+	if strings.EqualFold(config.Options["debug"], "on") {
+		verbosity = gplog.LOGDEBUG
+	}
+	gplog.SetVerbosity(verbosity)
+}
+
+func GetDebug() int {
+	return gplog.GetVerbosity()
 }
 
 func ShouldEnableEncryption(config *PluginConfig) bool {
@@ -176,17 +190,15 @@ func GetS3Path(folder string, path string) string {
 	return fmt.Sprintf("%s/%s", folder, lastFour)
 }
 
-func Delete(c *cli.Context) error {
+func DeleteBackup(c *cli.Context) error {
 	timestamp := c.Args().Get(1)
 	if timestamp == "" {
 		return errors.New("delete requires a <timestamp>")
 	}
 
-	gplog.InitializeLogging("gpbackup", "")
 	if !IsValidTimestamp(timestamp) {
 		msg := fmt.Sprintf("delete requires a <timestamp> with format "+
 			"YYYYMMDDHHMMSS, but received: %s", timestamp)
-		gplog.Error(msg)
 		return fmt.Errorf(msg)
 	}
 
@@ -194,7 +206,7 @@ func Delete(c *cli.Context) error {
 	// note that "backups" is a directory is a fact of how we save, choosing
 	// to use the 3 parent directories of the source file. That becomes:
 	// <s3folder>/backups/<date>/<timestamp>
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gpbackup)
 	if err != nil {
 		return err
 	}

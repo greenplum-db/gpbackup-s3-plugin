@@ -4,6 +4,7 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gpbackup-s3-plugin/s3plugin"
 	"github.com/urfave/cli"
 
@@ -40,6 +41,36 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(newPath).To(Equal(expectedPath))
 		})
 	})
+	Describe("ShouldEnableDebug", func() {
+		It("returns INFO when no debug in config during gpbackup", func() {
+			s3plugin.ShouldEnableDebug(pluginConfig, s3plugin.Gpbackup)
+			result := s3plugin.GetDebug()
+			Expect(result).To(Equal(gplog.LOGINFO))
+		})
+		It("returns INFO when no debug in config during gprestore", func() {
+			s3plugin.ShouldEnableDebug(pluginConfig, s3plugin.Gprestore)
+			result := s3plugin.GetDebug()
+			Expect(result).To(Equal(gplog.LOGINFO))
+		})
+		It("returns DEBUG when debug set to 'on' in config", func() {
+			pluginConfig.Options["debug"] = "on"
+			s3plugin.ShouldEnableDebug(pluginConfig, s3plugin.Gpbackup)
+			result := s3plugin.GetDebug()
+			Expect(result).To(Equal(gplog.LOGDEBUG))
+		})
+		It("returns INFO when debug set to 'off' in config", func() {
+			pluginConfig.Options["debug"] = "off"
+			s3plugin.ShouldEnableDebug(pluginConfig, s3plugin.Gprestore)
+			result := s3plugin.GetDebug()
+			Expect(result).To(Equal(gplog.LOGINFO))
+		})
+		It("returns INFO when debug set to anything else in config", func() {
+			pluginConfig.Options["debug"] = "random_text"
+			s3plugin.ShouldEnableDebug(pluginConfig, s3plugin.Gpbackup)
+			result := s3plugin.GetDebug()
+			Expect(result).To(Equal(gplog.LOGINFO))
+		})
+	})
 	Describe("ShouldEnableEncryption", func() {
 		It("returns true when no encryption in config", func() {
 			delete(pluginConfig.Options, "encryption")
@@ -61,7 +92,6 @@ var _ = Describe("s3_plugin tests", func() {
 			result := s3plugin.ShouldEnableEncryption(pluginConfig)
 			Expect(result).To(BeTrue())
 		})
-
 	})
 	Describe("ValidateConfig", func() {
 		It("succeeds when all fields in config filled", func() {
@@ -135,7 +165,7 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			context := cli.NewContext(nil, flags, nil)
 
-			err = s3plugin.Delete(context)
+			err = s3plugin.DeleteBackup(context)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("delete requires a <timestamp>"))
@@ -145,7 +175,7 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			context := cli.NewContext(nil, flags, nil)
 
-			err = s3plugin.Delete(context)
+			err = s3plugin.DeleteBackup(context)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("delete requires a <timestamp> with format YYYYMMDDHHMMSS, but received: badformat"))

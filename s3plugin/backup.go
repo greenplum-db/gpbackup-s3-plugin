@@ -21,9 +21,7 @@ func SetupPluginForBackup(c *cli.Context) error {
 	if scope != Master && scope != SegmentHost {
 		return nil
 	}
-
-	gplog.InitializeLogging("gpbackup", "")
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gpbackup)
 	if err != nil {
 		return err
 	}
@@ -43,8 +41,7 @@ func SetupPluginForBackup(c *cli.Context) error {
 }
 
 func BackupFile(c *cli.Context) error {
-	gplog.InitializeLogging("gpbackup", "")
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gpbackup)
 	if err != nil {
 		return err
 	}
@@ -71,10 +68,9 @@ func BackupFile(c *cli.Context) error {
 }
 
 func BackupDirectory(c *cli.Context) error {
-	gplog.InitializeLogging("gpbackup", "")
 	start := time.Now()
 	totalBytes := int64(0)
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gpbackup)
 	if err != nil {
 		return err
 	}
@@ -119,11 +115,10 @@ func BackupDirectory(c *cli.Context) error {
 }
 
 func BackupDirectoryParallel(c *cli.Context) error {
-	gplog.InitializeLogging("gpbackup", "")
 	start := time.Now()
 	totalBytes := int64(0)
 	parallel := 5
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gpbackup)
 	if err != nil {
 		return err
 	}
@@ -189,8 +184,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 }
 
 func BackupData(c *cli.Context) error {
-	gplog.InitializeLogging("gpbackup", "")
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gpbackup)
 	if err != nil {
 		return err
 	}

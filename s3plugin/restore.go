@@ -22,14 +22,12 @@ func SetupPluginForRestore(c *cli.Context) error {
 	if scope != Master && scope != SegmentHost {
 		return nil
 	}
-	gplog.InitializeLogging("gprestore", "")
 	_, err := readAndValidatePluginConfig(c.Args().Get(0))
 	return err
 }
 
 func RestoreFile(c *cli.Context) error {
-	gplog.InitializeLogging("gprestore", "")
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gprestore)
 	if err != nil {
 		return err
 	}
@@ -57,10 +55,9 @@ func RestoreFile(c *cli.Context) error {
 }
 
 func RestoreDirectory(c *cli.Context) error {
-	gplog.InitializeLogging("gprestore", "")
 	start := time.Now()
 	totalBytes := int64(0)
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gprestore)
 	if err != nil {
 		return err
 	}
@@ -113,11 +110,10 @@ func RestoreDirectory(c *cli.Context) error {
 }
 
 func RestoreDirectoryParallel(c *cli.Context) error {
-	gplog.InitializeLogging("gprestore", "")
 	start := time.Now()
 	totalBytes := int64(0)
 	parallel := 5
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gprestore)
 	if err != nil {
 		return err
 	}
@@ -198,8 +194,7 @@ func RestoreDirectoryParallel(c *cli.Context) error {
 }
 
 func RestoreData(c *cli.Context) error {
-	gplog.InitializeLogging("gprestore", "")
-	config, sess, err := readConfigAndStartSession(c)
+	config, sess, err := readConfigAndStartSession(c, Gprestore)
 	if err != nil {
 		return err
 	}
