@@ -27,9 +27,10 @@ func SetupPluginForBackup(c *cli.Context) error {
 	}
 	localBackupDir := c.Args().Get(1)
 	_, timestamp := filepath.Split(localBackupDir)
-	testFilePath := fmt.Sprintf("%s/gpbackup_%s_report", localBackupDir, timestamp)
+	testFileName := fmt.Sprintf("gpbackup_%s_report", timestamp)
+	testFilePath := fmt.Sprintf("%s/%s", localBackupDir, testFileName)
 	fileKey := GetS3Path(config.Options["folder"], testFilePath)
-	file, err := os.Create(testFilePath) // dummy empty reader for probe
+	file, err := os.Create("/tmp/" + testFileName) // dummy empty reader for probe
 	defer func() {
 		_ = file.Close()
 	}()
