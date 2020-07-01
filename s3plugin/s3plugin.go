@@ -105,7 +105,6 @@ func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig,
 	}
 	disableSSL := !ShouldEnableEncryption(config)
 
-	ShouldEnableDebug(config, operation)
 	awsConfig := aws.NewConfig().
 		WithRegion(config.Options["region"]).
 		WithEndpoint(config.Options["endpoint"]).
@@ -125,19 +124,6 @@ func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig,
 		return nil, nil, err
 	}
 	return config, sess, nil
-}
-
-func ShouldEnableDebug(config *PluginConfig, operation string) {
-	gplog.InitializeLogging(strings.ToLower(operation), "")
-	verbosity := gplog.LOGINFO
-	if strings.EqualFold(config.Options["debug"], "on") {
-		verbosity = gplog.LOGDEBUG
-	}
-	gplog.SetVerbosity(verbosity)
-}
-
-func GetDebug() int {
-	return gplog.GetVerbosity()
 }
 
 func ShouldEnableEncryption(config *PluginConfig) bool {

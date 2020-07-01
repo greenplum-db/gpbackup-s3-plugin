@@ -31,12 +31,11 @@ func SetupPluginForBackup(c *cli.Context) error {
 	testFilePath := fmt.Sprintf("%s/%s", localBackupDir, testFileName)
 	fileKey := GetS3Path(config.Options["folder"], testFilePath)
 	file, err := os.Create("/tmp/" + testFileName) // dummy empty reader for probe
-	defer func() {
-		_ = file.Close()
-	}()
+	defer file.Close()
 	if err != nil {
 		return err
 	}
+
 	_, _, err = uploadFile(sess, config.Options["bucket"], fileKey, file)
 	return err
 }
@@ -50,22 +49,18 @@ func BackupFile(c *cli.Context) error {
 	bucket := config.Options["bucket"]
 	fileKey := GetS3Path(config.Options["folder"], fileName)
 	file, err := os.Open(fileName)
-	defer func() {
-		_ = file.Close()
-	}()
+	defer file.Close()
 	if err != nil {
 		return err
 	}
 	bytes, elapsed, err := uploadFile(sess, bucket, fileKey, file)
-	if err == nil {
-		msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", bytes,
-			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
-		gplog.Verbose(msg)
-		fmt.Println(msg)
-	} else {
-		gplog.FatalOnError(err)
+	if err != nil {
+		return err
 	}
-	return err
+
+	gplog.Info("Uploaded %d bytes for %s in %v", bytes, filepath.Base(fileKey),
+		elapsed.Round(time.Millisecond))
+	return nil
 }
 
 func BackupDirectory(c *cli.Context) error {
@@ -79,7 +74,7 @@ func BackupDirectory(c *cli.Context) error {
 	bucket := config.Options["bucket"]
 	gplog.Verbose("Restore Directory '%s' from S3", dirName)
 	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
-	fmt.Printf("dirKey = %s\n", dirName)
+	gplog.Info("dirKey = %s\n", dirName)
 
 	// Populate a list of files to be backed up
 	fileList := make([]string, 0)
@@ -98,21 +93,19 @@ func BackupDirectory(c *cli.Context) error {
 			return err
 		}
 		bytes, elapsed, err := uploadFile(sess, bucket, fileName, file)
-		if err == nil {
-			totalBytes += bytes
-			msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", bytes,
-				filepath.Base(fileName), elapsed.Round(time.Millisecond))
-			gplog.Verbose(msg)
-			fmt.Println(msg)
-		} else {
-			gplog.FatalOnError(err)
-		}
 		_ = file.Close()
+		if err != nil {
+			return err
+		}
+
+		totalBytes += bytes
+		gplog.Debug("Uploaded %d bytes for %s in %v", bytes,
+			filepath.Base(fileName), elapsed.Round(time.Millisecond))
 	}
 
-	fmt.Printf("Uploaded %d files (%d bytes) in %v\n",
-		len(fileList), totalBytes, time.Since(start).Round(time.Millisecond))
-	return err
+	gplog.Info("Uploaded %d files (%d bytes) in %v\n", len(fileList),
+		totalBytes, time.Since(start).Round(time.Millisecond))
+	return nil
 }
 
 func BackupDirectoryParallel(c *cli.Context) error {
@@ -130,7 +123,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 	bucket := config.Options["bucket"]
 	gplog.Verbose("Backup Directory '%s' to S3", dirName)
 	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
-	fmt.Printf("dirKey = %s\n", dirName)
+	gplog.Info("dirKey = %s\n", dirName)
 
 	// Populate a list of files to be backed up
 	fileList := make([]string, 0)
@@ -179,7 +172,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 	// Wait for jobs to be done
 	wg.Wait()
 
-	fmt.Printf("Uploaded %d files (%d bytes) in %v\n",
+	gplog.Info("Uploaded %d files (%d bytes) in %v\n",
 		len(fileList), totalBytes, time.Since(start).Round(time.Millisecond))
 	return finalErr
 }
@@ -193,13 +186,13 @@ func BackupData(c *cli.Context) error {
 	bucket := config.Options["bucket"]
 	fileKey := GetS3Path(config.Options["folder"], dataFile)
 	bytes, elapsed, err := uploadFile(sess, bucket, fileKey, os.Stdin)
-	if err == nil {
-		gplog.Verbose("Uploaded %d bytes for file %s in %v", bytes,
-			filepath.Base(fileKey), elapsed.Round(time.Millisecond))
-	} else {
-		gplog.FatalOnError(err)
+	if err != nil {
+		return err
 	}
-	return err
+
+	gplog.Debug("Uploaded %d bytes for file %s in %v", bytes,
+		filepath.Base(fileKey), elapsed.Round(time.Millisecond))
+	return nil
 }
 
 const UploadChunkSize = int64(Mebibyte) * 10
@@ -215,7 +208,7 @@ func uploadFile(sess *session.Session, bucket string, fileKey string,
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
-		Body:   bufio.NewReaderSize(file, int(UploadChunkSize) * Concurrency),
+		Body:   bufio.NewReaderSize(file, int(UploadChunkSize)*Concurrency),
 	})
 	if err != nil {
 		return 0, -1, err

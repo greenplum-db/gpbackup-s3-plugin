@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gpbackup-s3-plugin/s3plugin"
 	"github.com/urfave/cli"
 )
 
 func main() {
+	gplog.InitializeLogging("gpbackup_s3_plugin", "")
 	app := cli.NewApp()
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version",
@@ -96,8 +98,9 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err.Error())
+	err := app.Run(os.Args)
+	if err != nil {
+		gplog.Error(err.Error())
 		os.Exit(1)
 	}
 }
