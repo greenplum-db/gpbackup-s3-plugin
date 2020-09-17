@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
+	"github.com/inhies/go-bytesize"
 	"github.com/urfave/cli"
 )
 
@@ -35,8 +36,7 @@ func SetupPluginForBackup(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	_, _, err = uploadFile(sess, config.Options["bucket"], fileKey, file)
+	_, _, err = uploadFile(sess, config, config.Options["bucket"], fileKey, file)
 	return err
 }
 
@@ -53,7 +53,7 @@ func BackupFile(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bytes, elapsed, err := uploadFile(sess, bucket, fileKey, file)
+	bytes, elapsed, err := uploadFile(sess, config, bucket, fileKey, file)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func BackupDirectory(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		bytes, elapsed, err := uploadFile(sess, bucket, fileName, file)
+		bytes, elapsed, err := uploadFile(sess, config, bucket, fileName, file)
 		_ = file.Close()
 		if err != nil {
 			return err
@@ -153,7 +153,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 					finalErr = err
 					return
 				}
-				bytes, elapsed, err := uploadFile(sess, bucket, fileKey, file)
+				bytes, elapsed, err := uploadFile(sess, config, bucket, fileKey, file)
 				if err == nil {
 					totalBytes += bytes
 					msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", bytes,
@@ -185,7 +185,8 @@ func BackupData(c *cli.Context) error {
 	dataFile := c.Args().Get(1)
 	bucket := config.Options["bucket"]
 	fileKey := GetS3Path(config.Options["folder"], dataFile)
-	bytes, elapsed, err := uploadFile(sess, bucket, fileKey, os.Stdin)
+
+	bytes, elapsed, err := uploadFile(sess, config, bucket, fileKey, os.Stdin)
 	if err != nil {
 		return err
 	}
@@ -195,24 +196,55 @@ func BackupData(c *cli.Context) error {
 	return nil
 }
 
-const UploadChunkSize = int64(Mebibyte) * 10
-
-func uploadFile(sess *session.Session, bucket string, fileKey string,
+func uploadFile(sess *session.Session, config *PluginConfig, bucket string, fileKey string,
 	file *os.File) (int64, time.Duration, error) {
 
 	start := time.Now()
+	uploadChunkSize, err := GetUploadChunkSize(config)
+	if err != nil {
+		return 0, -1, err
+	}
+	uploadConcurrency, err := GetUploadConcurrency(config)
+	if err != nil {
+		return 0, -1, err
+	}
+
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
-		u.PartSize = UploadChunkSize
-		u.Concurrency = Concurrency
+		u.PartSize = uploadChunkSize
+		u.Concurrency = uploadConcurrency
 	})
-	_, err := uploader.Upload(&s3manager.UploadInput{
+	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
-		Body:   bufio.NewReaderSize(file, int(UploadChunkSize)*Concurrency),
+		Body:   bufio.NewReaderSize(file, int(uploadChunkSize)*uploadConcurrency),
 	})
 	if err != nil {
 		return 0, -1, err
 	}
 	bytes, err := getFileSize(uploader.S3, bucket, fileKey)
 	return bytes, time.Since(start), err
+}
+
+func GetUploadChunkSize(config *PluginConfig) (int64, error) {
+	uploadChunkSize := UploadChunkSize
+	if sizeFromConfig, ok := config.Options["upload_chunk_size"]; ok {
+		size, err := bytesize.Parse(sizeFromConfig)
+		if err != nil {
+			return 0, err
+		}
+		uploadChunkSize = int64(size)
+	}
+	return uploadChunkSize, nil
+}
+
+func GetUploadConcurrency(config *PluginConfig) (int, error) {
+	uploadConcurrency := Concurrency
+	if val, ok := config.Options["upload_concurrency"]; ok {
+		r, err := strconv.Atoi(val)
+		if err != nil {
+			return 0, err
+		}
+		uploadConcurrency = r
+	}
+	return uploadConcurrency, nil
 }

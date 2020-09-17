@@ -28,6 +28,8 @@ var _ = Describe("s3_plugin tests", func() {
 				"folder":                "folder_name",
 				"region":                "region_name",
 				"endpoint":              "endpoint_name",
+				"upload_concurrency":    "5",
+				"upload_chunk_size":     "7MB",
 			},
 		}
 	})
@@ -114,6 +116,29 @@ var _ = Describe("s3_plugin tests", func() {
 			delete(pluginConfig.Options, "folder")
 			err := s3plugin.ValidateConfig(pluginConfig)
 			Expect(err).To(HaveOccurred())
+		})
+	})
+	Describe("Optional config params", func() {
+		It("correctly parses upload params from config", func() {
+			chunkSize, err := s3plugin.GetUploadChunkSize(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunkSize).To(Equal(int64(7 * 1024 * 1024)))
+
+			concurrency, err := s3plugin.GetUploadConcurrency(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(concurrency).To(Equal(5))
+		})
+		It("uses default values if upload params are not specified", func() {
+			delete(pluginConfig.Options, "upload_chunk_size")
+			delete(pluginConfig.Options, "upload_concurrency")
+
+			chunkSize, err := s3plugin.GetUploadChunkSize(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunkSize).To(Equal(int64(10 * 1024 * 1024)))
+
+			concurrency, err := s3plugin.GetUploadConcurrency(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(concurrency).To(Equal(6))
 		})
 	})
 	Describe("Delete", func() {
