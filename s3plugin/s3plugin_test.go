@@ -30,6 +30,8 @@ var _ = Describe("s3_plugin tests", func() {
 				"endpoint":                       "endpoint_name",
 				"backup_max_concurrent_requests": "5",
 				"backup_multipart_chunksize":     "7MB",
+				"restore_max_concurrent_requests": "5",
+				"restore_multipart_chunksize":     "7MB",
 			},
 		}
 	})
@@ -137,6 +139,27 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(chunkSize).To(Equal(int64(10 * 1024 * 1024)))
 
 			concurrency, err := s3plugin.GetUploadConcurrency(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(concurrency).To(Equal(6))
+		})
+		It("correctly parses download params from config", func() {
+			chunkSize, err := s3plugin.GetDownloadChunkSize(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunkSize).To(Equal(int64(7 * 1024 * 1024)))
+
+			concurrency, err := s3plugin.GetDownloadConcurrency(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(concurrency).To(Equal(5))
+		})
+		It("uses default values if download params are not specified", func() {
+			delete(pluginConfig.Options, "restore_multipart_chunksize")
+			delete(pluginConfig.Options, "restore_max_concurrent_requests")
+
+			chunkSize, err := s3plugin.GetDownloadChunkSize(pluginConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunkSize).To(Equal(int64(10 * 1024 * 1024)))
+
+			concurrency, err := s3plugin.GetDownloadConcurrency(pluginConfig)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(concurrency).To(Equal(6))
 		})
