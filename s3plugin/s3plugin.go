@@ -113,7 +113,8 @@ func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig,
 		WithRegion(config.Options["region"]).
 		WithEndpoint(config.Options["endpoint"]).
 		WithS3ForcePathStyle(true).
-		WithDisableSSL(disableSSL)
+		WithDisableSSL(disableSSL).
+		WithUseDualStack(true)
 
 	// Will use default credential chain if none provided
 	if config.Options["aws_access_key_id"] != "" {
