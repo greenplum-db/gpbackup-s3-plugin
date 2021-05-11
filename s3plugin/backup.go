@@ -213,6 +213,8 @@ func uploadFile(sess *session.Session, config *PluginConfig, bucket string, file
 		u.PartSize = uploadChunkSize
 		u.Concurrency = uploadConcurrency
 	})
+	gplog.Debug("Uploading file %s with chunksize %d and concurrency %d",
+		filepath.Base(fileKey), uploader.PartSize, uploader.Concurrency)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),

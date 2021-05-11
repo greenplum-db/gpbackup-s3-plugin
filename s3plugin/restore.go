@@ -231,7 +231,9 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 	if err != nil {
 		return 0, -1, err
 	}
-	downloader := s3manager.NewDownloader(sess)
+	downloader := s3manager.NewDownloader(sess, func(u *s3manager.Downloader) {
+		u.PartSize = downloadChunkSize
+	})
 
 	totalBytes, err := getFileSize(downloader.S3, bucket, fileKey)
 	if err != nil {
@@ -252,7 +254,7 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 			return 0, -1, err
 		}
 	} else {
-		return downloadFileInParallel(downloader, downloadConcurrency, downloadChunkSize, totalBytes, bucket, fileKey,
+		return downloadFileInParallel(sess, downloadConcurrency, downloadChunkSize, totalBytes, bucket, fileKey,
 			file)
 	}
 	return totalBytes, time.Since(start), err
@@ -261,7 +263,7 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 /*
  * Performs ranged requests for the file while exploiting parallelism between the copy and download tasks
  */
-func downloadFileInParallel(downloader *s3manager.Downloader, downloadConcurrency int, downloadChunkSize int64,
+func downloadFileInParallel(sess *session.Session, downloadConcurrency int, downloadChunkSize int64,
 	totalBytes int64, bucket string, fileKey string, file *os.File) (int64, time.Duration, error) {
 
 	var finalErr error
@@ -300,6 +302,13 @@ func downloadFileInParallel(downloader *s3manager.Downloader, downloadConcurrenc
 		buffer := make([]byte, downloadChunkSize)
 		downloadBuffers <- buffer
 	}
+	// Download concurrency is handled on our end hence we don't need to set concurrency
+	downloader := s3manager.NewDownloader(sess, func(u *s3manager.Downloader) {
+		u.PartSize = downloadChunkSize
+		u.Concurrency = 1
+	})
+	gplog.Debug("Downloading file %s with chunksize %d and concurrency %d",
+		filepath.Base(fileKey), downloadChunkSize, numberOfWorkers)
 
 	for i := 0; i < numberOfWorkers; i++ {
 		go func(id int) {
@@ -311,6 +320,9 @@ func downloadFileInParallel(downloader *s3manager.Downloader, downloadConcurrenc
 					buffer = make([]byte, j.endByte - j.startByte + 1)
 				}
 				bufferPointers[j.chunkIndex] = &buffer
+				gplog.Debug("Worker %d (chunk %d) for %s with partsize %d and concurrency %d",
+					id, j.chunkIndex, filepath.Base(fileKey),
+					downloader.PartSize, downloader.Concurrency)
 				chunkBytes, err := downloader.Download(
 					aws.NewWriteAtBuffer(buffer),
 					&s3.GetObjectInput{

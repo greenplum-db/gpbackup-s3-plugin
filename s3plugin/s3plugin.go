@@ -27,8 +27,8 @@ var Version string
 const apiVersion = "0.4.0"
 const Mebibyte = 1024 * 1024
 const Concurrency = 6
-const UploadChunkSize = int64(Mebibyte) * 10 // default 10MB
-const DownloadChunkSize = int64(Mebibyte) * 10 // default 10MB
+const UploadChunkSize = int64(Mebibyte) * 500 // default 500MB
+const DownloadChunkSize = int64(Mebibyte) * 500 // default 500MB
 
 type Scope string
 
