@@ -33,8 +33,8 @@ func RestoreFile(c *cli.Context) error {
 		return err
 	}
 	fileName := c.Args().Get(1)
-	bucket := config.Options["bucket"]
-	fileKey := GetS3Path(config.Options["folder"], fileName)
+	bucket := config.Options.Bucket
+	fileKey := GetS3Path(config.Options.Folder, fileName)
 	file, err := os.Create(fileName)
 	defer file.Close()
 	if err != nil {
@@ -62,7 +62,7 @@ func RestoreDirectory(c *cli.Context) error {
 		return err
 	}
 	dirName := c.Args().Get(1)
-	bucket := config.Options["bucket"]
+	bucket := config.Options.Bucket
 	gplog.Verbose("Restore Directory '%s' from S3", dirName)
 	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
 	gplog.Info("dirKey = %s\n", dirName)
@@ -123,7 +123,7 @@ func RestoreDirectoryParallel(c *cli.Context) error {
 	if len(c.Args()) == 3 {
 		parallel, _ = strconv.Atoi(c.Args().Get(2))
 	}
-	bucket := config.Options["bucket"]
+	bucket := config.Options.Bucket
 	gplog.Verbose("Restore Directory Parallel '%s' from S3", dirName)
 	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
 	fmt.Printf("dirKey = %s\n", dirName)
@@ -201,8 +201,8 @@ func RestoreData(c *cli.Context) error {
 		return err
 	}
 	dataFile := c.Args().Get(1)
-	bucket := config.Options["bucket"]
-	fileKey := GetS3Path(config.Options["folder"], dataFile)
+	bucket := config.Options.Bucket
+	fileKey := GetS3Path(config.Options.Folder, dataFile)
 	bytes, elapsed, err := downloadFile(sess, config, bucket, fileKey, os.Stdout)
 	if err != nil {
 		return err
@@ -313,11 +313,11 @@ func downloadFileInParallel(sess *session.Session, downloadConcurrency int, down
 	for i := 0; i < numberOfWorkers; i++ {
 		go func(id int) {
 			for j := range jobs {
-				buffer := <- downloadBuffers
+				buffer := <-downloadBuffers
 				chunkStart := time.Now()
 				byteRange := fmt.Sprintf("bytes=%d-%d", j.startByte, j.endByte)
-				if j.endByte - j.startByte + 1 != downloadChunkSize {
-					buffer = make([]byte, j.endByte - j.startByte + 1)
+				if j.endByte-j.startByte+1 != downloadChunkSize {
+					buffer = make([]byte, j.endByte-j.startByte+1)
 				}
 				bufferPointers[j.chunkIndex] = &buffer
 				gplog.Debug("Worker %d (chunk %d) for %s with partsize %d and concurrency %d",
@@ -367,8 +367,8 @@ func downloadFileInParallel(sess *session.Session, downloadConcurrency int, down
 
 func GetDownloadChunkSize(config *PluginConfig) (int64, error) {
 	downloadChunkSize := DownloadChunkSize
-	if sizeFromConfig, ok := config.Options["restore_multipart_chunksize"]; ok {
-		size, err := bytesize.Parse(sizeFromConfig)
+	if config.Options.RestoreMultipartChunksize != "" {
+		size, err := bytesize.Parse(config.Options.RestoreMultipartChunksize)
 		if err != nil {
 			return 0, err
 		}
@@ -379,8 +379,8 @@ func GetDownloadChunkSize(config *PluginConfig) (int64, error) {
 
 func GetDownloadConcurrency(config *PluginConfig) (int, error) {
 	downloadConcurrency := Concurrency
-	if val, ok := config.Options["restore_max_concurrent_requests"]; ok {
-		r, err := strconv.Atoi(val)
+	if config.Options.RestoreMaxConcurrentRequests != "" {
+		r, err := strconv.Atoi(config.Options.RestoreMaxConcurrentRequests)
 		if err != nil {
 			return 0, err
 		}
