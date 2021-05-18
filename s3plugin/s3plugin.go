@@ -27,7 +27,7 @@ var Version string
 const apiVersion = "0.4.0"
 const Mebibyte = 1024 * 1024
 const Concurrency = 6
-const UploadChunkSize = int64(Mebibyte) * 500 // default 500MB
+const UploadChunkSize = int64(Mebibyte) * 500   // default 500MB
 const DownloadChunkSize = int64(Mebibyte) * 500 // default 500MB
 
 type Scope string
@@ -44,8 +44,23 @@ const (
 )
 
 type PluginConfig struct {
-	ExecutablePath string
-	Options        map[string]string
+	ExecutablePath string        `yaml:"executablepath"`
+	Options        PluginOptions `yaml:"options"`
+}
+
+type PluginOptions struct {
+	AwsAccessKeyId               string `yaml:"aws_access_key_id"`
+	AwsSecretAccessKey           string `yaml:"aws_secret_access_key"`
+	BackupMaxConcurrentRequests  string `yaml:"backup_max_concurrent_requests"`
+	BackupMultipartChunksize     string `yaml:"backup_multipart_chunksize"`
+	Bucket                       string `yaml:"bucket"`
+	Encryption                   string `yaml:"encryption"`
+	Endpoint                     string `yaml:"endpoint"`
+	Folder                       string `yaml:"folder"`
+	HttpProxy                    string `yaml:"http_proxy"`
+	Region                       string `yaml:"region"`
+	RestoreMaxConcurrentRequests string `yaml:"restore_max_concurrent_requests"`
+	RestoreMultipartChunksize    string `yaml:"restore_multipart_chunksize"`
 }
 
 func CleanupPlugin(c *cli.Context) error {
@@ -66,8 +81,8 @@ func readAndValidatePluginConfig(configFile string) (*PluginConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = yaml.Unmarshal(contents, config); err != nil {
-		return nil, err
+	if err = yaml.UnmarshalStrict(contents, config); err != nil {
+		return nil, fmt.Errorf("Yaml failures encountered reading config file %s. Error: %s", configFile, err.Error())
 	}
 	if err = ValidateConfig(config); err != nil {
 		return nil, err
@@ -76,28 +91,34 @@ func readAndValidatePluginConfig(configFile string) (*PluginConfig, error) {
 }
 
 func ValidateConfig(config *PluginConfig) error {
-	requiredKeys := []string{"bucket", "folder"}
-	for _, key := range requiredKeys {
-		if config.Options[key] == "" {
-			return fmt.Errorf("%s must exist in plugin configuration file", key)
-		}
+	var errTxt string
+	opt := &config.Options
+
+	if opt.Bucket == "" {
+		errTxt += fmt.Sprintf("bucket must exist and cannot be empty in plugin configuration file\n")
+	}
+	if opt.Folder == "" {
+		errTxt += fmt.Sprintf("folder must exist and cannot be empty in plugin configuration file\n")
 	}
 
-	if config.Options["aws_access_key_id"] == "" {
-		if config.Options["aws_secret_access_key"] != "" {
-			return fmt.Errorf("aws_access_key_id must exist in plugin configuration file if aws_secret_access_key does")
+	if opt.AwsAccessKeyId == "" {
+		if opt.AwsSecretAccessKey != "" {
+			errTxt += fmt.Sprintf("aws_access_key_id must exist in plugin configuration file if aws_secret_access_key does\n")
 		}
-	} else if config.Options["aws_secret_access_key"] == "" {
-		return fmt.Errorf("aws_secret_access_key must exist in plugin configuration file if aws_access_key_id does")
+	} else if opt.AwsSecretAccessKey == "" {
+		errTxt += fmt.Sprintf("aws_secret_access_key must exist in plugin configuration file if aws_access_key_id does\n")
 	}
 
-	if config.Options["region"] == "" {
-		if config.Options["endpoint"] == "" {
-			return fmt.Errorf("region or endpoint must exist in plugin configuration file")
+	if opt.Region == "" {
+		if opt.Endpoint == "" {
+			errTxt += fmt.Sprintf("region or endpoint must exist in plugin configuration file\n")
 		}
-		config.Options["region"] = "unused"
+		opt.Region = "unused"
 	}
 
+	if errTxt != "" {
+		return errors.New(errTxt)
+	}
 	return nil
 }
 
@@ -107,28 +128,29 @@ func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig,
 	if err != nil {
 		return nil, nil, err
 	}
-	disableSSL := !ShouldEnableEncryption(config)
+
+	disableSSL := !ShouldEnableEncryption(config.Options.Encryption)
 
 	awsConfig := aws.NewConfig().
-		WithRegion(config.Options["region"]).
-		WithEndpoint(config.Options["endpoint"]).
+		WithRegion(config.Options.Region).
+		WithEndpoint(config.Options.Endpoint).
 		WithS3ForcePathStyle(true).
 		WithDisableSSL(disableSSL).
 		WithUseDualStack(true)
 
 	// Will use default credential chain if none provided
-	if config.Options["aws_access_key_id"] != "" {
+	if config.Options.AwsAccessKeyId != "" {
 		awsConfig = awsConfig.WithCredentials(
 			credentials.NewStaticCredentials(
-				config.Options["aws_access_key_id"],
-				config.Options["aws_secret_access_key"], ""))
+				config.Options.AwsAccessKeyId,
+				config.Options.AwsSecretAccessKey, ""))
 	}
 
-	if config.Options["http_proxy"] != "" {
+	if config.Options.HttpProxy != "" {
 		httpclient := &http.Client{
 			Transport: &http.Transport{
 				Proxy: func(*http.Request) (*url.URL, error) {
-					return url.Parse(config.Options["http_proxy"])
+					return url.Parse(config.Options.HttpProxy)
 				},
 			},
 		}
@@ -142,8 +164,8 @@ func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig,
 	return config, sess, nil
 }
 
-func ShouldEnableEncryption(config *PluginConfig) bool {
-	isOff := strings.EqualFold(config.Options["encryption"], "off")
+func ShouldEnableEncryption(encryption string) bool {
+	isOff := strings.EqualFold(encryption, "off")
 	return !isOff
 }
 
@@ -212,8 +234,8 @@ func DeleteBackup(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	deletePath := filepath.Join(config.Options["folder"], "backups", date, timestamp)
-	bucket := config.Options["bucket"]
+	deletePath := filepath.Join(config.Options.Folder, "backups", date, timestamp)
+	bucket := config.Options.Bucket
 	gplog.Debug("Delete location = s3://%s/%s", bucket, deletePath)
 
 	service := s3.New(sess)
