@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
+	"github.com/inhies/go-bytesize"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
 )
@@ -26,9 +28,9 @@ var Version string
 
 const apiVersion = "0.4.0"
 const Mebibyte = 1024 * 1024
-const Concurrency = 6
-const UploadChunkSize = int64(Mebibyte) * 500   // default 500MB
-const DownloadChunkSize = int64(Mebibyte) * 500 // default 500MB
+const DefaultConcurrency = 6
+const DefaultUploadChunkSize = int64(Mebibyte) * 500   // default 500MB
+const DefaultDownloadChunkSize = int64(Mebibyte) * 500 // default 500MB
 
 type Scope string
 
@@ -61,6 +63,11 @@ type PluginOptions struct {
 	Region                       string `yaml:"region"`
 	RestoreMaxConcurrentRequests string `yaml:"restore_max_concurrent_requests"`
 	RestoreMultipartChunksize    string `yaml:"restore_multipart_chunksize"`
+
+	UploadChunkSize     int64
+	UploadConcurrency   int
+	DownloadChunkSize   int64
+	DownloadConcurrency int
 }
 
 func CleanupPlugin(c *cli.Context) error {
@@ -84,23 +91,39 @@ func readAndValidatePluginConfig(configFile string) (*PluginConfig, error) {
 	if err = yaml.UnmarshalStrict(contents, config); err != nil {
 		return nil, fmt.Errorf("Yaml failures encountered reading config file %s. Error: %s", configFile, err.Error())
 	}
-	if err = ValidateConfig(config); err != nil {
+	if err = InitializeAndValidateConfig(config); err != nil {
 		return nil, err
 	}
 	return config, nil
 }
 
-func ValidateConfig(config *PluginConfig) error {
+func InitializeAndValidateConfig(config *PluginConfig) error {
+	var err error
 	var errTxt string
 	opt := &config.Options
 
+	// Initialize defaults
+	if opt.Region == "" {
+		opt.Region = "unused"
+	}
+	if opt.Encryption == "" {
+		opt.Encryption = "yes"
+	}
+	opt.UploadChunkSize = DefaultUploadChunkSize
+	opt.UploadConcurrency = DefaultConcurrency
+	opt.DownloadChunkSize = DefaultDownloadChunkSize
+	opt.DownloadConcurrency = DefaultConcurrency
+
+	// Validate configurations and overwrite defaults
+	if config.ExecutablePath == "" {
+		errTxt += fmt.Sprintf("executable_path must exist and cannot be empty in plugin configuration file\n")
+	}
 	if opt.Bucket == "" {
 		errTxt += fmt.Sprintf("bucket must exist and cannot be empty in plugin configuration file\n")
 	}
 	if opt.Folder == "" {
 		errTxt += fmt.Sprintf("folder must exist and cannot be empty in plugin configuration file\n")
 	}
-
 	if opt.AwsAccessKeyId == "" {
 		if opt.AwsSecretAccessKey != "" {
 			errTxt += fmt.Sprintf("aws_access_key_id must exist in plugin configuration file if aws_secret_access_key does\n")
@@ -108,12 +131,41 @@ func ValidateConfig(config *PluginConfig) error {
 	} else if opt.AwsSecretAccessKey == "" {
 		errTxt += fmt.Sprintf("aws_secret_access_key must exist in plugin configuration file if aws_access_key_id does\n")
 	}
-
-	if opt.Region == "" {
-		if opt.Endpoint == "" {
-			errTxt += fmt.Sprintf("region or endpoint must exist in plugin configuration file\n")
+	if opt.Region == "unused" && opt.Endpoint == "" {
+		errTxt += fmt.Sprintf("region or endpoint must exist in plugin configuration file\n")
+	}
+	if opt.Encryption != "yes" && opt.Encryption != "no" {
+		errTxt += fmt.Sprintf("Invalid encryption configuration. Valid choices are yes or no.\n")
+	}
+	if opt.BackupMultipartChunksize != "" {
+		chunkSize, err := bytesize.Parse(opt.BackupMultipartChunksize)
+		if err != nil {
+			errTxt += fmt.Sprintf("Invalid backup_multipart_chunksize. Err: %s\n", err)
 		}
-		opt.Region = "unused"
+		// Chunk size is being converted from uint64 to int64. This is safe as
+		// long as chunksize smaller than math.MaxInt64 bytes (~9223 Petabytes)
+		opt.UploadChunkSize = int64(chunkSize)
+	}
+	if opt.BackupMaxConcurrentRequests != "" {
+		opt.UploadConcurrency, err = strconv.Atoi(opt.BackupMaxConcurrentRequests)
+		if err != nil {
+			errTxt += fmt.Sprintf("Invalid backup_max_concurrent_requests. Err: %s\n", err)
+		}
+	}
+	if opt.RestoreMultipartChunksize != "" {
+		chunkSize, err := bytesize.Parse(opt.RestoreMultipartChunksize)
+		if err != nil {
+			errTxt += fmt.Sprintf("Invalid restore_multipart_chunksize. Err: %s\n", err)
+		}
+		// Chunk size is being converted from uint64 to int64. This is safe as
+		// long as chunksize smaller than math.MaxInt64 bytes (~9223 Petabytes)
+		opt.DownloadChunkSize = int64(chunkSize)
+	}
+	if opt.RestoreMaxConcurrentRequests != "" {
+		opt.DownloadConcurrency, err = strconv.Atoi(opt.RestoreMaxConcurrentRequests)
+		if err != nil {
+			errTxt += fmt.Sprintf("Invalid restore_max_concurrent_requests. Err: %s\n", err)
+		}
 	}
 
 	if errTxt != "" {
