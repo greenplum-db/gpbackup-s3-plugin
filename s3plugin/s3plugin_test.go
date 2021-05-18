@@ -64,102 +64,121 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(result).To(BeTrue())
 		})
 	})
-	Describe("ValidateConfig", func() {
+	Describe("InitializeAndValidateConfig", func() {
+		Context("Sets defaults", func() {
+			It("sets region to unused when endpoint is used instead of region", func() {
+				opts.Region = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.Region).To(Equal("unused"))
+			})
+			It(`sets encryption to default value "yes" if none is specified`, func() {
+				opts.Encryption = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.Encryption).To(Equal("yes"))
+			})
+			It("sets backup upload chunk size to default if BackupMultipartChunkSize is not specified", func() {
+				opts.BackupMultipartChunksize = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.UploadChunkSize).To(Equal(s3plugin.DefaultUploadChunkSize))
+			})
+			It("sets backup upload concurrency to default if BackupMaxConcurrentRequests is not specified", func() {
+				opts.BackupMaxConcurrentRequests = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.UploadConcurrency).To(Equal(s3plugin.DefaultConcurrency))
+			})
+			It("sets restore download chunk size to default if RestoreMultipartChunkSize is not specified", func() {
+				opts.RestoreMultipartChunksize = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.DownloadChunkSize).To(Equal(s3plugin.DefaultDownloadChunkSize))
+			})
+			It("sets restore download concurrency to default is RestoreMaxConcurrentRequests is not specified", func() {
+				opts.RestoreMaxConcurrentRequests = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.DownloadConcurrency).To(Equal(s3plugin.DefaultConcurrency))
+			})
+		})
 		It("succeeds when all fields in config filled", func() {
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(BeNil())
 		})
 		It("succeeds when all fields except endpoint filled in config", func() {
 			opts.Endpoint = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(BeNil())
 		})
 		It("succeeds when all fields except region filled in config", func() {
 			opts.Region = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(BeNil())
 		})
 		It("succeeds when all fields except aws_access_key_id and aws_secret_access_key in config", func() {
 			opts.AwsAccessKeyId = ""
 			opts.AwsSecretAccessKey = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(BeNil())
-		})
-		It("sets region to unused when endpoint is used instead of region", func() {
-			opts.Region = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(pluginConfig.Options.Region).To(Equal("unused"))
 		})
 		It("returns error when neither region nor endpoint in config", func() {
 			opts.Region = ""
 			opts.Endpoint = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(HaveOccurred())
 		})
 		It("returns error when no aws_access_key_id in config", func() {
 			opts.AwsAccessKeyId = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(HaveOccurred())
 		})
 		It("returns error when no aws_secret_access_key in config", func() {
 			opts.AwsSecretAccessKey = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(HaveOccurred())
 		})
 		It("returns error when no bucket in config", func() {
 			opts.Bucket = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(HaveOccurred())
 		})
 		It("returns error when no folder in config", func() {
 			opts.Folder = ""
-			err := s3plugin.ValidateConfig(pluginConfig)
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 			Expect(err).To(HaveOccurred())
 		})
-	})
-	Describe("Optional config params", func() {
-		It("correctly parses upload params from config", func() {
-			chunkSize, err := s3plugin.GetUploadChunkSize(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkSize).To(Equal(int64(7 * 1024 * 1024)))
-
-			concurrency, err := s3plugin.GetUploadConcurrency(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(concurrency).To(Equal(5))
+		It("returns error when the encryption value is invalid", func() {
+			opts.Encryption = "invalid_value"
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+			Expect(err).To(HaveOccurred())
 		})
-		It("uses default values if upload params are not specified", func() {
-			opts.BackupMultipartChunksize = ""
-			opts.BackupMaxConcurrentRequests = ""
-
-			chunkSize, err := s3plugin.GetUploadChunkSize(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkSize).To(Equal(int64(500 * 1024 * 1024)))
-
-			concurrency, err := s3plugin.GetUploadConcurrency(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(concurrency).To(Equal(6))
+		It("returns error when the encryption value is invalid", func() {
+			opts.Encryption = "invalid_value"
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+			Expect(err).To(HaveOccurred())
+		})
+		It("returns error if executable path is missing", func() {
+			pluginConfig.ExecutablePath = ""
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+			Expect(err).To(HaveOccurred())
+		})
+		It("correctly parses upload params from config", func() {
+			opts.BackupMultipartChunksize = "10MB"
+			opts.BackupMaxConcurrentRequests = "10"
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+			Expect(err).To(BeNil())
+			Expect(opts.UploadChunkSize).To(Equal(int64(10 * 1024 * 1024)))
+			Expect(opts.UploadConcurrency).To(Equal(10))
 		})
 		It("correctly parses download params from config", func() {
-			chunkSize, err := s3plugin.GetDownloadChunkSize(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkSize).To(Equal(int64(7 * 1024 * 1024)))
-
-			concurrency, err := s3plugin.GetDownloadConcurrency(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(concurrency).To(Equal(5))
-		})
-		It("uses default values if download params are not specified", func() {
-			opts.RestoreMultipartChunksize = ""
-			opts.RestoreMaxConcurrentRequests = ""
-
-			chunkSize, err := s3plugin.GetDownloadChunkSize(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkSize).To(Equal(int64(500 * 1024 * 1024)))
-
-			concurrency, err := s3plugin.GetDownloadConcurrency(pluginConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(concurrency).To(Equal(6))
+			opts.RestoreMultipartChunksize = "10GB"
+			opts.RestoreMaxConcurrentRequests = "10"
+			err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+			Expect(err).To(BeNil())
+			Expect(opts.DownloadChunkSize).To(Equal(int64(10 * 1024 * 1024 * 1024)))
+			Expect(opts.DownloadConcurrency).To(Equal(10))
 		})
 	})
 	Describe("Delete", func() {

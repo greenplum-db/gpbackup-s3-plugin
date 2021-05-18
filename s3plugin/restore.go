@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/inhies/go-bytesize"
 	"github.com/urfave/cli"
 )
 
@@ -223,16 +222,8 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 	file *os.File) (int64, time.Duration, error) {
 
 	start := time.Now()
-	downloadChunkSize, err := GetDownloadChunkSize(config)
-	if err != nil {
-		return 0, -1, err
-	}
-	downloadConcurrency, err := GetDownloadConcurrency(config)
-	if err != nil {
-		return 0, -1, err
-	}
 	downloader := s3manager.NewDownloader(sess, func(u *s3manager.Downloader) {
-		u.PartSize = downloadChunkSize
+		u.PartSize = config.Options.DownloadChunkSize
 	})
 
 	totalBytes, err := getFileSize(downloader.S3, bucket, fileKey)
@@ -240,7 +231,7 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 		return 0, -1, err
 	}
 	gplog.Verbose("File %s size = %d bytes", filepath.Base(fileKey), totalBytes)
-	if totalBytes <= downloadChunkSize {
+	if totalBytes <= config.Options.DownloadChunkSize {
 		buffer := &aws.WriteAtBuffer{}
 		if _, err = downloader.Download(
 			buffer,
@@ -254,8 +245,7 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 			return 0, -1, err
 		}
 	} else {
-		return downloadFileInParallel(sess, downloadConcurrency, downloadChunkSize, totalBytes, bucket, fileKey,
-			file)
+		return downloadFileInParallel(sess, config.Options.DownloadConcurrency, config.Options.DownloadChunkSize, totalBytes, bucket, fileKey, file)
 	}
 	return totalBytes, time.Since(start), err
 }
@@ -363,28 +353,4 @@ func downloadFileInParallel(sess *session.Session, downloadConcurrency int, down
 
 	waitGroup.Wait()
 	return totalBytes, time.Since(start), finalErr
-}
-
-func GetDownloadChunkSize(config *PluginConfig) (int64, error) {
-	downloadChunkSize := DownloadChunkSize
-	if config.Options.RestoreMultipartChunksize != "" {
-		size, err := bytesize.Parse(config.Options.RestoreMultipartChunksize)
-		if err != nil {
-			return 0, err
-		}
-		downloadChunkSize = int64(size)
-	}
-	return downloadChunkSize, nil
-}
-
-func GetDownloadConcurrency(config *PluginConfig) (int, error) {
-	downloadConcurrency := Concurrency
-	if config.Options.RestoreMaxConcurrentRequests != "" {
-		r, err := strconv.Atoi(config.Options.RestoreMaxConcurrentRequests)
-		if err != nil {
-			return 0, err
-		}
-		downloadConcurrency = r
-	}
-	return downloadConcurrency, nil
 }

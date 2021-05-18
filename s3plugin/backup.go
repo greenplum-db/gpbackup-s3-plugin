@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/inhies/go-bytesize"
 	"github.com/urfave/cli"
 )
 
@@ -200,14 +199,8 @@ func uploadFile(sess *session.Session, config *PluginConfig, bucket string, file
 	file *os.File) (int64, time.Duration, error) {
 
 	start := time.Now()
-	uploadChunkSize, err := GetUploadChunkSize(config)
-	if err != nil {
-		return 0, -1, err
-	}
-	uploadConcurrency, err := GetUploadConcurrency(config)
-	if err != nil {
-		return 0, -1, err
-	}
+	uploadChunkSize := config.Options.UploadChunkSize
+	uploadConcurrency := config.Options.UploadConcurrency
 
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
 		u.PartSize = uploadChunkSize
@@ -215,38 +208,17 @@ func uploadFile(sess *session.Session, config *PluginConfig, bucket string, file
 	})
 	gplog.Debug("Uploading file %s with chunksize %d and concurrency %d",
 		filepath.Base(fileKey), uploader.PartSize, uploader.Concurrency)
-	_, err = uploader.Upload(&s3manager.UploadInput{
+	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
-		Body:   bufio.NewReaderSize(file, int(uploadChunkSize)*uploadConcurrency),
+		// This will cause memory issues if
+		// segment_per_host*uploadChunkSize*uploadConcurreny is larger than
+		// the amount of ram a system has.
+		Body: bufio.NewReaderSize(file, int(uploadChunkSize)*uploadConcurrency),
 	})
 	if err != nil {
 		return 0, -1, err
 	}
 	bytes, err := getFileSize(uploader.S3, bucket, fileKey)
 	return bytes, time.Since(start), err
-}
-
-func GetUploadChunkSize(config *PluginConfig) (int64, error) {
-	uploadChunkSize := UploadChunkSize
-	if config.Options.BackupMultipartChunksize != "" {
-		size, err := bytesize.Parse(config.Options.BackupMultipartChunksize)
-		if err != nil {
-			return 0, err
-		}
-		uploadChunkSize = int64(size)
-	}
-	return uploadChunkSize, nil
-}
-
-func GetUploadConcurrency(config *PluginConfig) (int, error) {
-	uploadConcurrency := Concurrency
-	if config.Options.BackupMaxConcurrentRequests != "" {
-		r, err := strconv.Atoi(config.Options.BackupMaxConcurrentRequests)
-		if err != nil {
-			return 0, err
-		}
-		uploadConcurrency = r
-	}
-	return uploadConcurrency, nil
 }
