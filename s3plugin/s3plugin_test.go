@@ -136,7 +136,7 @@ var _ = Describe("s3_plugin tests", func() {
 
 			chunkSize, err := s3plugin.GetUploadChunkSize(pluginConfig)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkSize).To(Equal(int64(10 * 1024 * 1024)))
+			Expect(chunkSize).To(Equal(int64(500 * 1024 * 1024)))
 
 			concurrency, err := s3plugin.GetUploadConcurrency(pluginConfig)
 			Expect(err).NotTo(HaveOccurred())
@@ -157,7 +157,7 @@ var _ = Describe("s3_plugin tests", func() {
 
 			chunkSize, err := s3plugin.GetDownloadChunkSize(pluginConfig)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkSize).To(Equal(int64(10 * 1024 * 1024)))
+			Expect(chunkSize).To(Equal(int64(500 * 1024 * 1024)))
 
 			concurrency, err := s3plugin.GetDownloadConcurrency(pluginConfig)
 			Expect(err).NotTo(HaveOccurred())
