@@ -27,7 +27,7 @@ func SetupPluginForRestore(c *cli.Context) error {
 }
 
 func RestoreFile(c *cli.Context) error {
-	config, sess, err := readConfigAndStartSession(c, Gprestore)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func RestoreFile(c *cli.Context) error {
 func RestoreDirectory(c *cli.Context) error {
 	start := time.Now()
 	totalBytes := int64(0)
-	config, sess, err := readConfigAndStartSession(c, Gprestore)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func RestoreDirectoryParallel(c *cli.Context) error {
 	start := time.Now()
 	totalBytes := int64(0)
 	parallel := 5
-	config, sess, err := readConfigAndStartSession(c, Gprestore)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func RestoreDirectoryParallel(c *cli.Context) error {
 }
 
 func RestoreData(c *cli.Context) error {
-	config, sess, err := readConfigAndStartSession(c, Gprestore)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
