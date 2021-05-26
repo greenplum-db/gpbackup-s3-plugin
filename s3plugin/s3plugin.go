@@ -40,11 +40,6 @@ const (
 	Segment     Scope = "segment"
 )
 
-const (
-	Gpbackup  string = "Gpbackup"
-	Gprestore string = "Gprestore"
-)
-
 type PluginConfig struct {
 	ExecutablePath string        `yaml:"executablepath"`
 	Options        PluginOptions `yaml:"options"`
@@ -174,7 +169,7 @@ func InitializeAndValidateConfig(config *PluginConfig) error {
 	return nil
 }
 
-func readConfigAndStartSession(c *cli.Context, operation string) (*PluginConfig, *session.Session, error) {
+func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session, error) {
 	configPath := c.Args().Get(0)
 	config, err := readAndValidatePluginConfig(configPath)
 	if err != nil {
@@ -282,7 +277,7 @@ func DeleteBackup(c *cli.Context) error {
 	// note that "backups" is a directory is a fact of how we save, choosing
 	// to use the 3 parent directories of the source file. That becomes:
 	// <s3folder>/backups/<date>/<timestamp>
-	config, sess, err := readConfigAndStartSession(c, Gpbackup)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}

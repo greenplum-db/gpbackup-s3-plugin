@@ -21,7 +21,7 @@ func SetupPluginForBackup(c *cli.Context) error {
 	if scope != Master && scope != SegmentHost {
 		return nil
 	}
-	config, sess, err := readConfigAndStartSession(c, Gpbackup)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
@@ -35,24 +35,23 @@ func SetupPluginForBackup(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = uploadFile(sess, config, config.Options.Bucket, fileKey, file)
+	_, _, err = uploadFile(sess, config, fileKey, file)
 	return err
 }
 
 func BackupFile(c *cli.Context) error {
-	config, sess, err := readConfigAndStartSession(c, Gpbackup)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
 	fileName := c.Args().Get(1)
-	bucket := config.Options.Bucket
 	fileKey := GetS3Path(config.Options.Folder, fileName)
 	file, err := os.Open(fileName)
 	defer file.Close()
 	if err != nil {
 		return err
 	}
-	bytes, elapsed, err := uploadFile(sess, config, bucket, fileKey, file)
+	bytes, elapsed, err := uploadFile(sess, config, fileKey, file)
 	if err != nil {
 		return err
 	}
@@ -65,14 +64,13 @@ func BackupFile(c *cli.Context) error {
 func BackupDirectory(c *cli.Context) error {
 	start := time.Now()
 	totalBytes := int64(0)
-	config, sess, err := readConfigAndStartSession(c, Gpbackup)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
 	dirName := c.Args().Get(1)
-	bucket := config.Options.Bucket
 	gplog.Verbose("Restore Directory '%s' from S3", dirName)
-	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
+	gplog.Verbose("S3 Location = s3://%s/%s", config.Options.Bucket, dirName)
 	gplog.Info("dirKey = %s\n", dirName)
 
 	// Populate a list of files to be backed up
@@ -91,7 +89,7 @@ func BackupDirectory(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		bytes, elapsed, err := uploadFile(sess, config, bucket, fileName, file)
+		bytes, elapsed, err := uploadFile(sess, config, fileName, file)
 		_ = file.Close()
 		if err != nil {
 			return err
@@ -111,7 +109,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 	start := time.Now()
 	totalBytes := int64(0)
 	parallel := 5
-	config, sess, err := readConfigAndStartSession(c, Gpbackup)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
@@ -119,9 +117,8 @@ func BackupDirectoryParallel(c *cli.Context) error {
 	if len(c.Args()) == 3 {
 		parallel, _ = strconv.Atoi(c.Args().Get(2))
 	}
-	bucket := config.Options.Bucket
 	gplog.Verbose("Backup Directory '%s' to S3", dirName)
-	gplog.Verbose("S3 Location = s3://%s/%s", bucket, dirName)
+	gplog.Verbose("S3 Location = s3://%s/%s", config.Options.Bucket, dirName)
 	gplog.Info("dirKey = %s\n", dirName)
 
 	// Populate a list of files to be backed up
@@ -152,7 +149,7 @@ func BackupDirectoryParallel(c *cli.Context) error {
 					finalErr = err
 					return
 				}
-				bytes, elapsed, err := uploadFile(sess, config, bucket, fileKey, file)
+				bytes, elapsed, err := uploadFile(sess, config, fileKey, file)
 				if err == nil {
 					totalBytes += bytes
 					msg := fmt.Sprintf("Uploaded %d bytes for %s in %v", bytes,
@@ -177,15 +174,14 @@ func BackupDirectoryParallel(c *cli.Context) error {
 }
 
 func BackupData(c *cli.Context) error {
-	config, sess, err := readConfigAndStartSession(c, Gpbackup)
+	config, sess, err := readConfigAndStartSession(c)
 	if err != nil {
 		return err
 	}
 	dataFile := c.Args().Get(1)
-	bucket := config.Options.Bucket
 	fileKey := GetS3Path(config.Options.Folder, dataFile)
 
-	bytes, elapsed, err := uploadFile(sess, config, bucket, fileKey, os.Stdin)
+	bytes, elapsed, err := uploadFile(sess, config, fileKey, os.Stdin)
 	if err != nil {
 		return err
 	}
@@ -195,10 +191,11 @@ func BackupData(c *cli.Context) error {
 	return nil
 }
 
-func uploadFile(sess *session.Session, config *PluginConfig, bucket string, fileKey string,
+func uploadFile(sess *session.Session, config *PluginConfig, fileKey string,
 	file *os.File) (int64, time.Duration, error) {
 
 	start := time.Now()
+	bucket := config.Options.Bucket
 	uploadChunkSize := config.Options.UploadChunkSize
 	uploadConcurrency := config.Options.UploadConcurrency
 
