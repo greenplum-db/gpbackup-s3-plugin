@@ -58,6 +58,8 @@ type PluginOptions struct {
 	Region                       string `yaml:"region"`
 	RestoreMaxConcurrentRequests string `yaml:"restore_max_concurrent_requests"`
 	RestoreMultipartChunksize    string `yaml:"restore_multipart_chunksize"`
+	PgPort                       string `yaml:"pgport"`
+	BackupPluginVersion          string `yaml:"backup_plugin_version"`
 
 	UploadChunkSize     int64
 	UploadConcurrency   int
