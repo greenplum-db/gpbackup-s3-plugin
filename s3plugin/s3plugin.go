@@ -104,7 +104,7 @@ func InitializeAndValidateConfig(config *PluginConfig) error {
 		opt.Region = "unused"
 	}
 	if opt.Encryption == "" {
-		opt.Encryption = "yes"
+		opt.Encryption = "on"
 	}
 	opt.UploadChunkSize = DefaultUploadChunkSize
 	opt.UploadConcurrency = DefaultConcurrency
@@ -131,8 +131,8 @@ func InitializeAndValidateConfig(config *PluginConfig) error {
 	if opt.Region == "unused" && opt.Endpoint == "" {
 		errTxt += fmt.Sprintf("region or endpoint must exist in plugin configuration file\n")
 	}
-	if opt.Encryption != "yes" && opt.Encryption != "no" {
-		errTxt += fmt.Sprintf("Invalid encryption configuration. Valid choices are yes or no.\n")
+	if opt.Encryption != "on" && opt.Encryption != "off" {
+		errTxt += fmt.Sprintf("Invalid encryption configuration. Valid choices are on or off.\n")
 	}
 	if opt.BackupMultipartChunksize != "" {
 		chunkSize, err := bytesize.Parse(opt.BackupMultipartChunksize)

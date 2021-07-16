@@ -72,11 +72,11 @@ var _ = Describe("s3_plugin tests", func() {
 				Expect(err).To(BeNil())
 				Expect(opts.Region).To(Equal("unused"))
 			})
-			It(`sets encryption to default value "yes" if none is specified`, func() {
+			It(`sets encryption to default value "on" if none is specified`, func() {
 				opts.Encryption = ""
 				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 				Expect(err).To(BeNil())
-				Expect(opts.Encryption).To(Equal("yes"))
+				Expect(opts.Encryption).To(Equal("on"))
 			})
 			It("sets backup upload chunk size to default if BackupMultipartChunkSize is not specified", func() {
 				opts.BackupMultipartChunksize = ""
