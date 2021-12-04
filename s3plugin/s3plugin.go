@@ -13,7 +13,9 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
@@ -171,6 +173,46 @@ func InitializeAndValidateConfig(config *PluginConfig) error {
 	return nil
 }
 
+// CustomRetryer wraps the SDK's built in DefaultRetryer
+type CustomRetryer struct {
+	client.DefaultRetryer
+}
+
+// ShouldRetry overrides the SDK's built in DefaultRetryer
+func (r CustomRetryer) ShouldRetry(req *request.Request) bool {
+	if r.NumMaxRetries == 0 {
+		return false
+	}
+
+	willRetry := false
+	if req.Error != nil && strings.Contains(req.Error.Error(), "connection reset by peer") {
+		willRetry = true
+	} else if req.HTTPResponse.StatusCode == 404 {
+		// 404 NoSuchKey error is possible due to AWS's eventual consistency
+		// when attempting to inspect or get a file too quickly after it was
+		// uploaded. The s3 plugin does exactly this to determine the amount of
+		// bytes uploaded. For this reason we retry 404 errors.
+		willRetry = true
+	} else {
+		willRetry = r.DefaultRetryer.ShouldRetry(req)
+	}
+
+	if willRetry {
+		// While its possible to let the AWS client log for us, it doesn't seem
+		// possible to set it up to only log errors. To prevent our log from
+		// filling up with debug logs of successful https requests and
+		// response, we'll only log when retries are attempted.
+		if req.Error != nil {
+			gplog.Debug("Https request attempt %d failed. Next attempt in %v. %s\n", req.RetryCount, r.RetryRules(req), req.Error.Error())
+		} else {
+			gplog.Debug("Https request attempt %d failed. Next attempt in %v.\n", req.RetryCount, r.RetryRules(req))
+		}
+		return true
+	}
+
+	return false
+}
+
 func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session, error) {
 	configPath := c.Args().Get(0)
 	config, err := readAndValidatePluginConfig(configPath)
@@ -180,7 +222,7 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 
 	disableSSL := !ShouldEnableEncryption(config.Options.Encryption)
 
-	awsConfig := aws.NewConfig().
+	awsConfig := request.WithRetryer(aws.NewConfig(), CustomRetryer{DefaultRetryer: client.DefaultRetryer{NumMaxRetries: 10}}).
 		WithRegion(config.Options.Region).
 		WithEndpoint(config.Options.Endpoint).
 		WithS3ForcePathStyle(true).
