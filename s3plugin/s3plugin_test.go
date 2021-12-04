@@ -2,12 +2,17 @@ package s3plugin_test
 
 import (
 	"flag"
+	"net/http"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpbackup-s3-plugin/s3plugin"
 	"github.com/urfave/cli"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
@@ -207,5 +212,22 @@ var _ = Describe("s3_plugin tests", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("delete requires a <timestamp> with format YYYYMMDDHHMMSS, but received: badformat"))
 		})
+	})
+	Describe("CustomRetryer", func() {
+		DescribeTable("validate retryer on different http status codes",
+			func(httpStatusCode int, expectedRetryValue bool) {
+				_, _, _ = testhelper.SetupTestLogger()
+				req := &request.Request{
+					HTTPResponse: &http.Response{StatusCode: httpStatusCode},
+				}
+				retryer := s3plugin.CustomRetryer{DefaultRetryer: client.DefaultRetryer{NumMaxRetries: 5}}
+				retryValue := retryer.ShouldRetry(req)
+				if retryValue != expectedRetryValue {
+					Fail("unexpected retry behavior")
+				}
+			},
+			Entry("status OK", 200, false),
+			Entry("NoSuchKey", 404, true),
+		)
 	})
 })
