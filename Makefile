@@ -26,7 +26,7 @@ depend :
 		$(GO_ENV) go mod download
 
 $(GINKGO) :
-		$(GO_ENV) go install github.com/onsi/ginkgo/ginkgo
+		$(GO_ENV) go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
 $(GOIMPORTS) :
 		$(GO_ENV) go install golang.org/x/tools/cmd/goimports
@@ -39,7 +39,7 @@ lint : $(GOLANG_LINTER)
 		golangci-lint run --tests=false
 
 unit : depend $(GINKGO)
-		$(GO_ENV) ginkgo -r -randomizeSuites -noisySkippings=false -randomizeAllSpecs s3plugin 2>&1
+		$(GO_ENV) ginkgo -r --keep-going --randomize-suites --randomize-all s3plugin 2>&1
 
 test : unit
 
