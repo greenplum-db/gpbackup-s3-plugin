@@ -18,7 +18,7 @@ import (
 
 func SetupPluginForBackup(c *cli.Context) error {
 	scope := (Scope)(c.Args().Get(2))
-	if scope != Master && scope != SegmentHost {
+	if scope != Master && scope != Coordinator && scope != SegmentHost {
 		return nil
 	}
 	config, sess, err := readConfigAndStartSession(c)

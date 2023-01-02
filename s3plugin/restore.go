@@ -19,7 +19,7 @@ import (
 
 func SetupPluginForRestore(c *cli.Context) error {
 	scope := (Scope)(c.Args().Get(2))
-	if scope != Master && scope != SegmentHost {
+	if scope != Master && scope != Coordinator && scope != SegmentHost {
 		return nil
 	}
 	_, err := readAndValidatePluginConfig(c.Args().Get(0))
