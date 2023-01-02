@@ -38,6 +38,7 @@ type Scope string
 
 const (
 	Master      Scope = "master"
+	Coordinator Scope = "coordinator"
 	SegmentHost Scope = "segment_host"
 	Segment     Scope = "segment"
 )
