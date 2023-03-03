@@ -39,7 +39,7 @@ lint : $(GOLANG_LINTER)
 		golangci-lint run --tests=false
 
 unit : depend $(GINKGO)
-		$(GO_ENV) ginkgo -r --keep-going --randomize-suites --randomize-all s3plugin 2>&1
+		$(GO_ENV) ginkgo -r --keep-going --randomize-suites --randomize-all --no-color s3plugin 2>&1
 
 test : unit
 
