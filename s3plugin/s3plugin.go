@@ -21,7 +21,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
+	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/inhies/go-bytesize"
+	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
 )
@@ -336,6 +338,86 @@ func DeleteBackup(c *cli.Context) error {
 		Prefix: aws.String(deletePath),
 	})
 
+	batchClient := s3manager.NewBatchDeleteWithClient(service)
+	return batchClient.Delete(aws.BackgroundContext(), iter)
+}
+
+func ListDirectory(c *cli.Context) error {
+	var err error
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	bucket := config.Options.Bucket
+
+	var listPath string
+	if len(c.Args()) == 2 {
+		listPath = c.Args().Get(1)
+	} else {
+		listPath = config.Options.Folder
+	}
+
+	client := s3.New(sess)
+	params := &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &listPath}
+	bucketObjectsList, _ := client.ListObjectsV2(params)
+	fileSizes := make([][]string, 0)
+
+	gplog.Verbose("Retrieving file information from directory %s in S3", listPath)
+	for _, key := range bucketObjectsList.Contents {
+		if strings.HasSuffix(*key.Key, "/") {
+			// Got a directory
+			continue
+		}
+
+		downloader := s3manager.NewDownloader(sess, func(u *s3manager.Downloader) {
+			u.PartSize = config.Options.DownloadChunkSize
+		})
+
+		totalBytes, err := getFileSize(downloader.S3, bucket, *key.Key)
+		if err != nil {
+			return err
+		}
+
+		fileSizes = append(fileSizes, []string{*key.Key, fmt.Sprint(totalBytes)})
+	}
+
+	// Render the data as a table
+	table := tablewriter.NewWriter(operating.System.Stdout)
+	columns := []string{"NAME", "SIZE(bytes)"}
+	table.SetHeader(columns)
+
+	colors := make([]tablewriter.Colors, len(columns))
+	for i := range colors {
+		colors[i] = tablewriter.Colors{tablewriter.Bold}
+	}
+
+	table.SetHeaderColor(colors...)
+	table.SetCenterSeparator(" ")
+	table.SetColumnSeparator(" ")
+	table.SetRowSeparator(" ")
+	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+	table.SetHeaderLine(true)
+	table.SetAutoFormatHeaders(false)
+	table.SetBorders(tablewriter.Border{Left: true, Right: true, Bottom: false, Top: false})
+	table.AppendBulk(fileSizes)
+	table.Render()
+
+	return err
+}
+
+func DeleteDirectory(c *cli.Context) error {
+	config, sess, err := readConfigAndStartSession(c)
+	if err != nil {
+		return err
+	}
+	deletePath := c.Args().Get(1)
+	bucket := config.Options.Bucket
+	gplog.Verbose("Deleting directory s3://%s/%s", bucket, deletePath)
+	service := s3.New(sess)
+	iter := s3manager.NewDeleteListIterator(service, &s3.ListObjectsInput{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(deletePath),
+	})
 	batchClient := s3manager.NewBatchDeleteWithClient(service)
 	return batchClient.Delete(aws.BackgroundContext(), iter)
 }
