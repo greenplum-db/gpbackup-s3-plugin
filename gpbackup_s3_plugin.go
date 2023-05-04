@@ -96,6 +96,16 @@ func main() {
 			Action: s3plugin.DeleteBackup,
 			Before: buildBeforeFunc(2),
 		},
+		{
+			Name:   "delete_directory",
+			Action: s3plugin.DeleteDirectory,
+			Before: buildBeforeFunc(2),
+		},
+		{
+			Name:   "list_directory",
+			Action: s3plugin.ListDirectory,
+			Before: buildBeforeFunc(1, 2),
+		},
 	}
 
 	err := app.Run(os.Args)

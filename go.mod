@@ -3,12 +3,13 @@ module github.com/greenplum-db/gpbackup-s3-plugin
 go 1.19
 
 require (
-	github.com/aws/aws-sdk-go v1.44.213
-	github.com/greenplum-db/gp-common-go-libs v1.0.11
+	github.com/aws/aws-sdk-go v1.44.257
+	github.com/greenplum-db/gp-common-go-libs v1.0.12
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.8.4
 	github.com/onsi/gomega v1.27.2
-	github.com/urfave/cli v1.22.12
+	github.com/urfave/cli v1.22.13
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -33,7 +34,9 @@ require (
 	github.com/jmoiron/sqlx v1.3.5 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/lib/pq v1.10.7 // indirect
+	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stretchr/testify v1.8.2 // indirect
