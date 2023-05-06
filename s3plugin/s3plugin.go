@@ -30,7 +30,7 @@ import (
 
 var Version string
 
-const apiVersion = "0.4.0"
+const apiVersion = "0.5.0"
 const Mebibyte = 1024 * 1024
 const DefaultConcurrency = 6
 const DefaultUploadChunkSize = int64(Mebibyte) * 500   // default 500MB
