@@ -74,6 +74,7 @@ Below are the s3 plugin options
 | `backup_multipart_chunksize` | maximum buffer/chunk size for multipart transfers during backup |
 | `restore_max_concurrent_requests` | concurrency level for any file's restore request |
 | `restore_multipart_chunksize` | maximum buffer/chunk size for multipart transfers during restore |
+| `max_request_retries` | maximum number of request retries to S3 |
 
 ## Example
 This is an example S3 storage plugin configuration file that is used in the next gpbackup example command. The name of the file is s3-test-config.yaml.

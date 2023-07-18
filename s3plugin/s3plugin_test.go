@@ -37,6 +37,7 @@ var _ = Describe("s3_plugin tests", func() {
 				Region:                       "region_name",
 				RestoreMaxConcurrentRequests: "5",
 				RestoreMultipartChunksize:    "7MB",
+				MaxRequestRetries:            "5",
 			},
 		}
 		opts = &pluginConfig.Options
@@ -100,11 +101,17 @@ var _ = Describe("s3_plugin tests", func() {
 				Expect(err).To(BeNil())
 				Expect(opts.DownloadChunkSize).To(Equal(s3plugin.DefaultDownloadChunkSize))
 			})
-			It("sets restore download concurrency to default is RestoreMaxConcurrentRequests is not specified", func() {
+			It("sets restore download concurrency to default if RestoreMaxConcurrentRequests is not specified", func() {
 				opts.RestoreMaxConcurrentRequests = ""
 				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
 				Expect(err).To(BeNil())
 				Expect(opts.DownloadConcurrency).To(Equal(s3plugin.DefaultConcurrency))
+			})
+			It("sets maximum number of retries to default if MaxRequestRetries is not specified", func() {
+				opts.MaxRequestRetries = ""
+				err := s3plugin.InitializeAndValidateConfig(pluginConfig)
+				Expect(err).To(BeNil())
+				Expect(opts.NumMaxRetries).To(Equal(s3plugin.DefaultNumMaxRetries))
 			})
 		})
 		It("succeeds when all fields in config filled", func() {
