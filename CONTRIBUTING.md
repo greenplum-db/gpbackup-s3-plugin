@@ -9,7 +9,7 @@ for details.
 
 ## Getting Started
 
-* Sign our [Contributor License Agreement](https://cla.pivotal.io/sign/greenplum)
+* Sign our [Contributor License Agreement](https://cla.vmware.com/cla/1/preview)
 * Fork the gpbackup-s3-plugin repository on GitHub
 * Run `go get github.com/greenplum-db/gpbackup-s3-plugin/...` and add
   your fork as a remote
