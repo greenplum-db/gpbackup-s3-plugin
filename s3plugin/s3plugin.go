@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -255,6 +256,10 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 	if err != nil {
 		return nil, nil, err
 	}
+
+	if config.Options.Endpoint != "" && net.ParseIP(config.Options.Endpoint) == nil {
+		sess.Handlers.Build.PushFront(removeBucketFromPath)
+	}
 	return config, sess, nil
 }
 
@@ -430,10 +435,15 @@ func IsValidTimestamp(timestamp string) bool {
 // The AWS SDK automatically prepends "/BucketName/" to any request's path, which breaks placement
 // of all objects when doing backups or restores with an Endpoint URL that already directs requests
 // to the correct bucket. To circumvent this, we manually remove the initial Bucket reference from
-// the path in this case.
+// the path in this case. NOTE: this does not happen in if an IP address is used directly, so we
+// attempt to parse IP addresses and do not invoke this removal if found.
 func removeBucketFromPath(req *request.Request) {
-	if strings.HasPrefix(req.Operation.HTTPPath, "/{Bucket}") {
-		req.Operation.HTTPPath = req.Operation.HTTPPath[9:]
-		req.HTTPRequest.URL.Path = req.HTTPRequest.URL.Path[9:]
+	req.Operation.HTTPPath = strings.Replace(req.Operation.HTTPPath, "/{Bucket}", "", -1)
+	if !strings.HasPrefix(req.Operation.HTTPPath, "/") {
+		req.Operation.HTTPPath = "/" + req.Operation.HTTPPath
+	}
+	req.HTTPRequest.URL.Path = strings.Replace(req.HTTPRequest.URL.Path, "/{Bucket}", "", -1)
+	if !strings.HasPrefix(req.HTTPRequest.URL.Path, "/") {
+		req.HTTPRequest.URL.Path = "/" + req.HTTPRequest.URL.Path
 	}
 }
