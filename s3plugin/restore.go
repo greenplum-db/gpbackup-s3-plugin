@@ -222,10 +222,6 @@ func downloadFile(sess *session.Session, config *PluginConfig, bucket string, fi
 	file *os.File) (int64, time.Duration, error) {
 
 	start := time.Now()
-
-	if config.Options.Endpoint != "" {
-		sess.Handlers.Build.PushFront(removeBucketFromPath)
-	}
 	downloader := s3manager.NewDownloader(sess, func(u *s3manager.Downloader) {
 		u.PartSize = config.Options.DownloadChunkSize
 	})

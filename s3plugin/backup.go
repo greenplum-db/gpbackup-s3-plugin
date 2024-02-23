@@ -199,10 +199,6 @@ func uploadFile(sess *session.Session, config *PluginConfig, fileKey string,
 	uploadChunkSize := config.Options.UploadChunkSize
 	uploadConcurrency := config.Options.UploadConcurrency
 
-	if config.Options.Endpoint != "" {
-		sess.Handlers.Build.PushFront(removeBucketFromPath)
-	}
-
 	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
 		u.PartSize = uploadChunkSize
 		u.Concurrency = uploadConcurrency
