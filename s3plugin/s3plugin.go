@@ -426,14 +426,3 @@ func IsValidTimestamp(timestamp string) bool {
 	timestampFormat := regexp.MustCompile(`^([0-9]{14})$`)
 	return timestampFormat.MatchString(timestamp)
 }
-
-// The AWS SDK automatically prepends "/BucketName/" to any request's path, which breaks placement
-// of all objects when doing backups or restores with an Endpoint URL that already directs requests
-// to the correct bucket. To circumvent this, we manually remove the initial Bucket reference from
-// the path in this case.
-func removeBucketFromPath(req *request.Request) {
-	if strings.HasPrefix(req.Operation.HTTPPath, "/{Bucket}") {
-		req.Operation.HTTPPath = req.Operation.HTTPPath[9:]
-		req.HTTPRequest.URL.Path = req.HTTPRequest.URL.Path[9:]
-	}
-}
