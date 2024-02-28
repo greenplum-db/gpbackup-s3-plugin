@@ -35,6 +35,7 @@ const Mebibyte = 1024 * 1024
 const DefaultConcurrency = 6
 const DefaultUploadChunkSize = int64(Mebibyte) * 500   // default 500MB
 const DefaultDownloadChunkSize = int64(Mebibyte) * 500 // default 500MB
+const DefaultNumMaxRetries = 10
 
 type Scope string
 
@@ -65,11 +66,13 @@ type PluginOptions struct {
 	RestoreMultipartChunksize    string `yaml:"restore_multipart_chunksize"`
 	PgPort                       string `yaml:"pgport"`
 	BackupPluginVersion          string `yaml:"backup_plugin_version"`
+	MaxRequestRetries            string `yaml:"max_request_retries"`
 
 	UploadChunkSize     int64
 	UploadConcurrency   int
 	DownloadChunkSize   int64
 	DownloadConcurrency int
+	NumMaxRetries       int
 }
 
 func CleanupPlugin(c *cli.Context) error {
@@ -115,6 +118,7 @@ func InitializeAndValidateConfig(config *PluginConfig) error {
 	opt.UploadConcurrency = DefaultConcurrency
 	opt.DownloadChunkSize = DefaultDownloadChunkSize
 	opt.DownloadConcurrency = DefaultConcurrency
+	opt.NumMaxRetries = DefaultNumMaxRetries
 
 	// Validate configurations and overwrite defaults
 	if config.ExecutablePath == "" {
@@ -167,6 +171,12 @@ func InitializeAndValidateConfig(config *PluginConfig) error {
 		opt.DownloadConcurrency, err = strconv.Atoi(opt.RestoreMaxConcurrentRequests)
 		if err != nil {
 			errTxt += fmt.Sprintf("Invalid restore_max_concurrent_requests. Err: %s\n", err)
+		}
+	}
+	if opt.MaxRequestRetries != "" {
+		opt.NumMaxRetries, err = strconv.Atoi(opt.MaxRequestRetries)
+		if err != nil {
+			errTxt += fmt.Sprintf("Invalid max_request_retries. Err: %s\n", err)
 		}
 	}
 
@@ -225,7 +235,7 @@ func readConfigAndStartSession(c *cli.Context) (*PluginConfig, *session.Session,
 
 	disableSSL := !ShouldEnableEncryption(config.Options.Encryption)
 
-	awsConfig := request.WithRetryer(aws.NewConfig(), CustomRetryer{DefaultRetryer: client.DefaultRetryer{NumMaxRetries: 10}}).
+	awsConfig := request.WithRetryer(aws.NewConfig(), CustomRetryer{DefaultRetryer: client.DefaultRetryer{NumMaxRetries: config.Options.NumMaxRetries}}).
 		WithRegion(config.Options.Region).
 		WithEndpoint(config.Options.Endpoint).
 		WithS3ForcePathStyle(true).
